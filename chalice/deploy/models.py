@@ -29,11 +29,7 @@ class TLSVersion(enum.Enum):
 
     @classmethod
     def create(cls, str_version):
-        # type: (str) -> Opt[TLSVersion]
-        for version in cls:
-            if version.value == str_version:
-                return version
-        return None
+        return next((version for version in cls if version.value == str_version), None)
 
 
 Type = TypeVar('Type')

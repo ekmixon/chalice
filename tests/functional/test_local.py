@@ -188,8 +188,7 @@ def test_has_thread_safe_current_request(config, sample_app,
             # http server is good, but not great.  You can still overwhelm
             # it pretty easily.
             time.sleep(0.001)
-            requests.post(
-                'http://localhost:%s/count' % port, json={'counter': i})
+            requests.post(f'http://localhost:{port}/count', json={'counter': i})
 
     threads = []
     for i in range(num_threads):
@@ -198,7 +197,7 @@ def test_has_thread_safe_current_request(config, sample_app,
         thread.start()
     for thread in threads:
         thread.join()
-    response = requests.get('http://localhost:%s/count' % port)
+    response = requests.get(f'http://localhost:{port}/count')
     assert len(response.json()) == len(range(num_requests * num_threads))
     assert sorted(response.json()) == list(range(num_requests * num_threads))
 
@@ -292,12 +291,12 @@ def test_can_import_env_vars(unused_tcp_port, http_session):
 def _wait_for_server_ready(process):
     if process.poll() is not None:
         raise AssertionError(
-            'Local server immediately exited with rc: %s' % process.poll()
+            f'Local server immediately exited with rc: {process.poll()}'
         )
 
 
 def _assert_env_var_loaded(port_number, http_session):
-    response = http_session.json_get('http://localhost:%s/' % port_number)
+    response = http_session.json_get(f'http://localhost:{port_number}/')
     assert response == {'hello': 'bar'}
 
 
@@ -308,7 +307,7 @@ def test_can_reload_server(unused_tcp_port, basic_app, http_session):
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
         _wait_for_server_ready(p)
-        url = 'http://localhost:%s/' % unused_tcp_port
+        url = f'http://localhost:{unused_tcp_port}/'
         try:
             assert http_session.json_get(url) == {'version': 'original'}
             # Updating the app should trigger a reload.

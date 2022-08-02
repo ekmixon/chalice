@@ -27,8 +27,7 @@ def policy_from_source_code(source_code):
     from chalice.analyzer import get_client_calls_for_app
     client_calls = get_client_calls_for_app(source_code)
     builder = PolicyBuilder()
-    policy = builder.build_policy_from_api_calls(client_calls)
-    return policy
+    return builder.build_policy_from_api_calls(client_calls)
 
 
 def load_api_policy_actions():
@@ -125,11 +124,7 @@ class PolicyBuilder(object):
     def build_policy_from_api_calls(self, client_calls):
         # type: (Dict[str, Set[str]]) -> Dict[str, Any]
         statements = self._build_statements_from_client_calls(client_calls)
-        policy = {
-            'Version': self.VERSION,
-            'Statement': statements
-        }
-        return policy
+        return {'Version': self.VERSION, 'Statement': statements}
 
     def _build_statements_from_client_calls(self, client_calls):
         # type: (Dict[str, Set[str]]) -> List[Dict[str, Any]]
@@ -140,8 +135,7 @@ class PolicyBuilder(object):
                 service, client_calls)
             custom_actions = self._get_actions_from_high_level_calls(
                 service, client_calls)
-            actions = api_actions + custom_actions
-            if actions:
+            if actions := api_actions + custom_actions:
                 statements.append({
                     'Effect': 'Allow',
                     'Action': actions,
@@ -156,8 +150,7 @@ class PolicyBuilder(object):
     def _get_actions_from_api_calls(self, service, client_calls):
         # type: (str, Dict[str, Set[str]]) -> List[str]
         if service not in self._api_policy_actions:
-            print("Unsupported service for auto policy generation: %s"
-                  % service)
+            print(f"Unsupported service for auto policy generation: {service}")
             return []
         service_actions = self._api_policy_actions[service]
         method_calls = client_calls[service]

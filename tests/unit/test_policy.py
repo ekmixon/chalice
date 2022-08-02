@@ -8,14 +8,13 @@ class OsUtilsMock(OSUtils):
     def file_exists(self, *args, **kwargs):
         return True
 
-    def get_file_contents(selfs, *args, **kwargs):
+    def get_file_contents(self, *args, **kwargs):
         return ''
 
 
 def iam_policy(client_calls):
     builder = PolicyBuilder()
-    policy = builder.build_policy_from_api_calls(client_calls)
-    return policy
+    return builder.build_policy_from_api_calls(client_calls)
 
 
 def test_app_policy_generator_vpc_policy():
@@ -51,15 +50,18 @@ def assert_policy_is(actual, expected):
 
 
 def test_single_call():
-    assert_policy_is(iam_policy({'dynamodb': set(['list_tables'])}), [{
-        'Effect': 'Allow',
-        'Action': [
-            'dynamodb:ListTables'
+    assert_policy_is(
+        iam_policy({'dynamodb': {'list_tables'}}),
+        [
+            {
+                'Effect': 'Allow',
+                'Action': ['dynamodb:ListTables'],
+                'Resource': [
+                    '*',
+                ],
+            }
         ],
-        'Resource': [
-            '*',
-        ]
-    }])
+    )
 
 
 def test_multiple_calls_in_same_service():
@@ -74,16 +76,17 @@ def test_multiple_calls_in_same_service():
         ]
     }]
     assert_policy_is(
-        iam_policy({'dynamodb': set(['list_tables', 'describe_table'])}),
-        expected_policy
+        iam_policy({'dynamodb': {'list_tables', 'describe_table'}}),
+        expected_policy,
     )
 
 
 def test_multiple_services_used():
     client_calls = {
-        'dynamodb': set(['list_tables']),
-        'cloudformation': set(['create_stack']),
+        'dynamodb': {'list_tables'},
+        'cloudformation': {'create_stack'},
     }
+
     assert_policy_is(iam_policy(client_calls), [
         {
             'Effect': 'Allow',
@@ -108,9 +111,9 @@ def test_multiple_services_used():
 
 def test_not_one_to_one_mapping():
     client_calls = {
-        's3': set(['list_buckets', 'list_objects',
-                   'create_multipart_upload']),
+        's3': {'list_buckets', 'list_objects', 'create_multipart_upload'}
     }
+
     assert_policy_is(iam_policy(client_calls), [
         {
             'Effect': 'Allow',
@@ -161,9 +164,7 @@ def test_no_changes():
 
 
 def test_can_handle_high_level_abstractions():
-    policy = iam_policy({
-        's3': set(['download_file', 'upload_file', 'copy'])
-    })
+    policy = iam_policy({'s3': {'download_file', 'upload_file', 'copy'}})
     assert_policy_is(policy, [{
         'Effect': 'Allow',
         'Action': [
@@ -178,4 +179,4 @@ def test_can_handle_high_level_abstractions():
 
 
 def test_noop_for_unknown_methods():
-    assert_policy_is(iam_policy({'s3': set(['unknown_method'])}), [])
+    assert_policy_is(iam_policy({'s3': {'unknown_method'}}), [])

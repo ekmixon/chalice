@@ -19,7 +19,7 @@ from chalice.config import DeployedResources
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.join(CURRENT_DIR, 'testapp')
 APP_FILE = os.path.join(PROJECT_DIR, 'app.py')
-RANDOM_APP_NAME = 'smoketest-%s' % str(uuid.uuid4())[:13]
+RANDOM_APP_NAME = f'smoketest-{str(uuid.uuid4())[:13]}'
 
 
 def retry(max_attempts, delay):
@@ -30,9 +30,12 @@ def retry(max_attempts, delay):
                 if result is not None:
                     return result
                 time.sleep(delay)
-            raise RuntimeError("Exhausted max retries of %s for function: %s"
-                               % (max_attempts, function))
+            raise RuntimeError(
+                f"Exhausted max retries of {max_attempts} for function: {function}"
+            )
+
         return _wrapped_with_retry
+
     return _create_wrapped_retry_function
 
 
@@ -100,7 +103,7 @@ class SmokeTestApplication(object):
 
     def _get_json(self, url):
         if not url.startswith('/'):
-            url = '/' + url
+            url = f'/{url}'
         response = requests.get(self.url + url)
         response.raise_for_status()
         return response.json()
@@ -151,7 +154,7 @@ class SmokeTestApplication(object):
             return
         new_file = os.path.join(self.app_dir, 'app-redeploy.py')
         original_app_py = os.path.join(self.app_dir, 'app.py')
-        shutil.move(original_app_py, original_app_py + '.bak')
+        shutil.move(original_app_py, f'{original_app_py}.bak')
         shutil.copy(new_file, original_app_py)
         _deploy_app(self.app_dir)
         self._has_redeployed = True
@@ -210,21 +213,19 @@ def _deploy_app(temp_dirname):
     d = factory.create_default_deployer(session, config, UI())
     region = session.get_config_variable('region')
     deployed = _deploy_with_retries(d, config)
-    application = SmokeTestApplication(
+    return SmokeTestApplication(
         region=region,
         deployed_values=deployed,
         stage_name='dev',
         app_name=RANDOM_APP_NAME,
         app_dir=temp_dirname,
     )
-    return application
 
 
 @retry(max_attempts=10, delay=20)
 def _deploy_with_retries(deployer, config):
     try:
-        deployed_stages = deployer.deploy(config, 'dev')
-        return deployed_stages
+        return deployer.deploy(config, 'dev')
     except ChaliceDeploymentError as e:
         # API Gateway aggressively throttles deployments.
         # If we run into this case, we just wait and try
@@ -317,15 +318,13 @@ def test_multi_doc_mapped_in_api(smoke_test_app, apig_client):
 
 @retry(max_attempts=18, delay=10)
 def _get_resource_id(apig_client, rest_api_id, path):
-    # This is the resource id for the '/path/{name}'
-    # route.  As far as I know this is the best way to get
-    # this id.
-    matches = [
-        resource for resource in
-        apig_client.get_resources(restApiId=rest_api_id)['items']
+    if matches := [
+        resource
+        for resource in apig_client.get_resources(restApiId=rest_api_id)[
+            'items'
+        ]
         if resource['path'] == path
-    ]
-    if matches:
+    ]:
         return matches[0]['id']
 
 
@@ -380,7 +379,7 @@ def test_can_raise_not_found(smoke_test_app):
 def test_unexpected_error_raises_500_in_prod_mode(smoke_test_app):
     # Can't use smoke_test_app.get_response() because we're explicitly
     # testing for a 500.
-    response = requests.get(smoke_test_app.url + '/arbitrary-error')
+    response = requests.get(f'{smoke_test_app.url}/arbitrary-error')
     assert response.status_code == 500
     assert response.json()['Code'] == 'InternalServerError'
     assert 'internal server error' in response.json()['Message']

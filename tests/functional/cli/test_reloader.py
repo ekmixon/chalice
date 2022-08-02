@@ -63,8 +63,7 @@ def get_worker_cls(worker_class_name):
     elif worker_class_name == 'stat':
         return StatWorkerProcess
     else:
-        raise RuntimeError("Unknown worker class type name: %s"
-                           % worker_class_name)
+        raise RuntimeError(f"Unknown worker class type name: {worker_class_name}")
 
 
 @use_all_watcher_types

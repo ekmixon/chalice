@@ -39,8 +39,11 @@ class Executor(BaseExecutor):
             message = messages.get(id(instruction))
             if message is not None:
                 self._ui.write(message)
-            getattr(self, '_do_%s' % instruction.__class__.__name__.lower(),
-                    self._default_handler)(instruction)
+            getattr(
+                self,
+                f'_do_{instruction.__class__.__name__.lower()}',
+                self._default_handler,
+            )(instruction)
 
     def _default_handler(self, instruction):
         # type: (models.Instruction) -> None
@@ -154,8 +157,7 @@ class Executor(BaseExecutor):
             }
             self.variables[instruction.output_var] = result
         else:
-            raise ValueError("Unknown builtin function: %s"
-                             % instruction.function_name)
+            raise ValueError(f"Unknown builtin function: {instruction.function_name}")
 
     def _resolve_variables(self, api_call):
         # type: (models.APICall) -> Dict[str, Any]
@@ -172,9 +174,8 @@ class VariableResolver(object):
         # type: (Any, Dict[str, str]) -> Any
 
         value_type = type(value).__name__.lower()
-        handler_name = '_resolve_%s' % value_type
-        handler = getattr(self, handler_name, None)
-        if handler:
+        handler_name = f'_resolve_{value_type}'
+        if handler := getattr(self, handler_name, None):
             return handler(value, variables)
         else:
             return value
@@ -210,11 +211,7 @@ class VariableResolver(object):
         return final
 
     def _resolve_list(self, value, variables):
-        # type: (Any, Dict[str, str]) -> Any
-        final_list = []
-        for v in value:
-            final_list.append(self.resolve_variables(v, variables))
-        return final_list
+        return [self.resolve_variables(v, variables) for v in value]
 
 
 # This class is used for the ``chalice dev plan`` command.
@@ -231,8 +228,12 @@ class DisplayOnlyExecutor(BaseExecutor):
         self._ui.write("Plan\n")
         self._ui.write("====\n\n")
         for instruction in plan.instructions:
-            getattr(self, '_do_%s' % instruction.__class__.__name__.lower(),
-                    self._default_handler)(instruction, spillover_values)
+            getattr(
+                self,
+                f'_do_{instruction.__class__.__name__.lower()}',
+                self._default_handler,
+            )(instruction, spillover_values)
+
         self._write_spillover(spillover_values)
 
     def _write_spillover(self, spillover_values):
@@ -252,9 +253,13 @@ class DisplayOnlyExecutor(BaseExecutor):
         for key, value in asdict(instruction).items():
             if isinstance(value, dict):
                 value = self._format_dict(value, spillover_values)
-            line = ('%-30s %s%20s %-10s' % (
-                instruction_name, self._LINE_VERTICAL, '%s:' % key, value)
+            line = '%-30s %s%20s %-10s' % (
+                instruction_name,
+                self._LINE_VERTICAL,
+                f'{key}:',
+                value,
             )
+
             self._ui.write(line + '\n')
             instruction_name = ''
         self._ui.write('\n')
@@ -275,9 +280,14 @@ class DisplayOnlyExecutor(BaseExecutor):
                 spillover_values[spillover_name] = value
                 value = spillover_name
             line = '%-31s%s%-15s%s%20s %-10s' % (
-                ' ', self._LINE_VERTICAL, ' ', self._LINE_VERTICAL,
-                '%s:' % key, value
+                ' ',
+                self._LINE_VERTICAL,
+                ' ',
+                self._LINE_VERTICAL,
+                f'{key}:',
+                value,
             )
+
             lines.append(line)
         return '\n'.join(lines)
 
@@ -286,8 +296,7 @@ class DisplayOnlyExecutor(BaseExecutor):
         first_cap_regex = re.compile('(.)([A-Z][a-z]+)')
         end_cap_regex = re.compile('([a-z0-9])([A-Z])')
         first = first_cap_regex.sub(r'\1_\2', v)
-        transformed = end_cap_regex.sub(r'\1_\2', first).upper()
-        return transformed
+        return end_cap_regex.sub(r'\1_\2', first).upper()
 
 
 class UnresolvedValueError(Exception):

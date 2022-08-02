@@ -86,9 +86,9 @@ class LambdaResponseFormatter(object):
             self._format_stacktrace(formatted, stack_trace)
 
         if error_type is not None:
-            formatted.write('{}: {}\n'.format(error_type, error_message))
+            formatted.write(f'{error_type}: {error_message}\n')
         else:
-            formatted.write('{}\n'.format(error_message))
+            formatted.write(f'{error_message}\n')
 
     def _format_stacktrace(self, formatted, stack_trace):
         # type: (StringIO, List[List[Union[str, int]]]) -> None
@@ -103,10 +103,8 @@ class LambdaResponseFormatter(object):
             # an extract_tb call. This is the behavior up to and including
             # python 3.6.
             path, lineno, function, code = frame
-            formatted.write(
-                '  File "{}", line {}, in {}\n'.format(path, lineno, function))
-            formatted.write(
-                '    {}\n'.format(code))
+            formatted.write(f'  File "{path}", line {lineno}, in {function}\n')
+            formatted.write(f'    {code}\n')
         else:
             # If it is not a list, its a string. This is because the 4-tuple
             # was replaced with a FrameSummary object which is serialized as
@@ -115,4 +113,4 @@ class LambdaResponseFormatter(object):
 
     def _format_success(self, formatted, payload):
         # type: (StringIO, bytes) -> None
-        formatted.write('{}\n'.format(str(payload.decode('utf-8'))))
+        formatted.write(f"{str(payload.decode('utf-8'))}\n")

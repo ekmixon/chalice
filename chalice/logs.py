@@ -72,7 +72,7 @@ class LogRetriever(object):
 
         """
         lambda_name = lambda_arn.split(':')[6]
-        log_group_name = '/aws/lambda/%s' % lambda_name
+        log_group_name = f'/aws/lambda/{lambda_name}'
         return cls(log_event_generator, log_group_name)
 
     def _is_lambda_message(self, event):
@@ -122,7 +122,7 @@ class LogRetriever(object):
             self._log_group_name, retrieve_options)
         for event in events:
             if not retrieve_options.include_lambda_messages and \
-                    self._is_lambda_message(event):
+                        self._is_lambda_message(event):
                 continue
             # logStreamName is: '2016/07/05/[id]hash'
             # We want to extract the hash portion and
@@ -150,11 +150,9 @@ class BaseLogEventGenerator(object):
 
 class LogEventGenerator(BaseLogEventGenerator):
     def iter_log_events(self, log_group_name, options):
-        # type: (str, LogRetrieveOptions) -> Iterator[CWLogEvent]
-        logs = self._client.iter_log_events(log_group_name=log_group_name,
-                                            start_time=options.start_time)
-        for log_message in logs:
-            yield log_message
+        yield from self._client.iter_log_events(
+            log_group_name=log_group_name, start_time=options.start_time
+        )
 
 
 class FollowLogEventGenerator(BaseLogEventGenerator):
@@ -173,9 +171,8 @@ class FollowLogEventGenerator(BaseLogEventGenerator):
         # type: (str, LogRetrieveOptions) -> Iterator[CWLogEvent]
         start_time = options.start_time
         try:
-            for event in self._loop_on_filter_log_events(log_group_name,
-                                                         start_time):
-                yield event
+            yield from self._loop_on_filter_log_events(log_group_name, start_time)
+
         except KeyboardInterrupt:
             return
 

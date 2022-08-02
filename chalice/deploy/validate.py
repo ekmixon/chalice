@@ -85,13 +85,11 @@ def validate_endpoint_type(config):
 
 
 def validate_feature_flags(chalice_app):
-    # type: (app.Chalice) -> None
-    missing_opt_in = set()
-    # pylint: disable=protected-access
-    for feature in chalice_app._features_used:
-        if feature not in chalice_app.experimental_feature_flags:
-            missing_opt_in.add(feature)
-    if missing_opt_in:
+    if missing_opt_in := {
+        feature
+        for feature in chalice_app._features_used
+        if feature not in chalice_app.experimental_feature_flags
+    }:
         raise ExperimentalFeatureError(missing_opt_in)
 
 
@@ -106,8 +104,7 @@ def validate_routes(routes):
         if not route_name:
             raise ValueError("Route cannot be the empty string")
         if route_name != '/' and route_name.endswith('/'):
-            raise ValueError("Route cannot end with a trailing slash: %s"
-                             % route_name)
+            raise ValueError(f"Route cannot end with a trailing slash: {route_name}")
         _validate_cors_for_route(route_name, methods)
 
 
@@ -161,11 +158,9 @@ def _validate_entry_content_type(route_entry, binary_types):
 
 
 def _validate_cors_for_route(route_url, route_methods):
-    # type: (str, Dict[str, app.RouteEntry]) -> None
-    entries_with_cors = [
+    if entries_with_cors := [
         entry for entry in route_methods.values() if entry.cors
-    ]
-    if entries_with_cors:
+    ]:
         # If the user has enabled CORS, they can't also have an OPTIONS
         # method because we'll create one for them.  API gateway will
         # raise an error about duplicate methods.
@@ -177,8 +172,10 @@ def _validate_cors_for_route(route_url, route_methods):
                 "added for you.  Please remove 'OPTIONS' from the list of "
                 "configured HTTP methods for: %s" % route_url)
 
-        if not all(entries_with_cors[0].cors == entry.cors for entry in
-                   entries_with_cors):
+        if any(
+            entries_with_cors[0].cors != entry.cors
+            for entry in entries_with_cors
+        ):
             raise ValueError(
                 "Route may not have multiple differing CORS configurations. "
                 "Please ensure all views for \"%s\" that have CORS configured "
@@ -205,14 +202,11 @@ def _validate_manage_iam_role(config):
     # it the user hasn't specified this value.
     # However, if the manage_iam_role value is not None, the user set it
     # to something, in which case we care if they set it to False.
-    if not config.manage_iam_role:
-        # If they don't want us to manage the role, they
-        # have to specify an iam_role_arn.
-        if not config.iam_role_arn:
-            raise ValueError(
-                "When 'manage_iam_role' is set to false, you "
-                "must provide an 'iam_role_arn' in config.json."
-            )
+    if not config.manage_iam_role and not config.iam_role_arn:
+        raise ValueError(
+            "When 'manage_iam_role' is set to false, you "
+            "must provide an 'iam_role_arn' in config.json."
+        )
 
 
 def validate_unique_function_names(config):
@@ -253,13 +247,7 @@ def _is_valid_queue_name(queue_name, queue_arn):
     # The mutually exclusiveness is verified in the on_sqs_message decorator.
     if queue_name is not None and queue_name.startswith(('https:', 'arn:')):
         return False
-    if queue_arn is not None and not queue_arn.startswith('arn:'):
-        return False
-    # We're not validating that the queue has only valid chars because SQS
-    # won't let you create a queue with that name in the first place.  We just
-    # want to detect the case where a user puts the queue URL/ARN instead of
-    # the name for the queue_name.
-    return True
+    return bool(queue_arn is None or queue_arn.startswith('arn:'))
 
 
 def validate_environment_variables_type(config):

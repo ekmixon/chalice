@@ -29,10 +29,11 @@ def create_policy_statement(source_arn, service_name, statement_id,
             }
         },
         'Effect': 'Allow',
-        'Principal': {'Service': '%s.amazonaws.com' % service_name},
+        'Principal': {'Service': f'{service_name}.amazonaws.com'},
         'Resource': 'function-arn',
         'Sid': statement_id,
     }
+
     if account_id is not None:
         policy_statement['Condition']['StringEquals'] = {
             'AWS:SourceAccount': account_id,
@@ -191,7 +192,7 @@ def test_missing_log_messages_doesnt_fail(stubbed_session):
 
     awsclient = TypedAWSClient(stubbed_session)
     logs = list(awsclient.iter_log_events('loggroup'))
-    assert logs == []
+    assert not logs
 
 
 def test_can_call_filter_log_events(stubbed_session):
@@ -419,8 +420,8 @@ class TestGetDomainName(object):
         certificate_arn = 'arn:aws:acm:us-east-1:aws_id:certificate/12345'
         regional_name = 'test.execute-api.us-east-1.amazonaws.com'
         stubbed_session.stub('apigateway')\
-            .get_domain_name(domainName=domain_name)\
-            .returns({
+                .get_domain_name(domainName=domain_name)\
+                .returns({
                 'domainName': 'test_domain',
                 'certificateUploadDate': datetime.datetime.now(),
                 'regionalDomainName': regional_name,
@@ -458,8 +459,8 @@ class TestGetDomainName(object):
         certificate_arn = 'arn:aws:acm:us-east-1:aws_id:certificate/12345'
         regional_name = 'test.execute-api.us-east-1.amazonaws.com'
         stubbed_session.stub('apigateway')\
-            .get_domain_name(domainName=domain_name)\
-            .returns({
+                .get_domain_name(domainName=domain_name)\
+                .returns({
                 'domainName': 'test_domain',
                 'certificateUploadDate': datetime.datetime.now(),
                 'regionalDomainName': regional_name,
@@ -495,8 +496,8 @@ class TestGetDomainName(object):
         certificate_arn = 'arn:aws:acm:us-east-1:aws_id:certificate/12345'
         regional_name = 'test.execute-api.us-east-1.amazonaws.com'
         stubbed_session.stub('apigatewayv2') \
-            .get_domain_name(DomainName=domain_name) \
-            .returns({
+                .get_domain_name(DomainName=domain_name) \
+                .returns({
                 'DomainName': 'test_domain',
                 'DomainNameConfigurations': [{
                     'ApiGatewayDomainName': regional_name,
@@ -534,7 +535,7 @@ class TestGetApiMapping(object):
         domain_name = 'test_domain'
         path = '(none)'
         stubbed_session.stub('apigatewayv2') \
-            .get_api_mappings(
+                .get_api_mappings(
                 DomainName=domain_name,
             ).returns({
                 'Items': [{
@@ -552,7 +553,7 @@ class TestGetApiMapping(object):
         domain_name = 'test_domain'
         path = 'path-key'
         stubbed_session.stub('apigatewayv2') \
-            .get_api_mappings(
+                .get_api_mappings(
                 DomainName=domain_name,
             ).returns({
                 'Items': [{
@@ -570,7 +571,7 @@ class TestGetApiMapping(object):
         domain_name = 'unknown_domain'
         path = '/unknown'
         stubbed_session.stub('apigatewayv2') \
-            .get_api_mappings(
+                .get_api_mappings(
                 DomainName=domain_name,
             ).raises_error(
                 error_code='NotFoundException',
@@ -588,7 +589,7 @@ class TestCreateApiMapping(object):
         api_id = 'rest_api_id'
         stage = 'test'
         stubbed_session.stub('apigatewayv2') \
-            .create_api_mapping(
+                .create_api_mapping(
             DomainName=domain_name,
             ApiMappingKey=path_key,
             ApiId=api_id,
@@ -616,7 +617,7 @@ class TestCreateApiMapping(object):
         api_id = 'rest_api_id'
         stage = 'test'
         stubbed_session.stub('apigatewayv2') \
-            .create_api_mapping(
+                .create_api_mapping(
             DomainName=domain_name,
             ApiMappingKey=path_key,
             ApiId=api_id,
@@ -646,7 +647,7 @@ class TestCreateBasePathMapping(object):
         api_id = 'rest_api_id'
         stage = 'test'
         stubbed_session.stub('apigateway') \
-            .create_base_path_mapping(
+                .create_base_path_mapping(
                 domainName=domain_name,
                 basePath=path_key,
                 restApiId=api_id,
@@ -673,7 +674,7 @@ class TestCreateBasePathMapping(object):
         api_id = 'rest_api_id'
         stage = 'test'
         stubbed_session.stub('apigateway') \
-            .create_base_path_mapping(
+                .create_base_path_mapping(
                 domainName=domain_name,
                 basePath=path_key,
                 restApiId=api_id,
@@ -701,9 +702,9 @@ class TestCreateBasePathMapping(object):
         stage = 'test'
 
         err_msg = 'An ApiMapping key may contain only letters, ' \
-                  'numbers and one of $-_.+!*\'()'
+                      'numbers and one of $-_.+!*\'()'
         stubbed_session.stub('apigateway') \
-            .create_base_path_mapping(
+                .create_base_path_mapping(
                 domainName=domain_name,
                 basePath=path_key,
                 restApiId=api_id,
@@ -1455,8 +1456,8 @@ class TestDeleteDomainName(object):
         domain_name = 'unknown_domain'
         err_msg = 'The resource specified in the request was not found.'
         stubbed_session.stub('apigatewayv2') \
-            .delete_domain_name(DomainName=domain_name) \
-            .raises_error(
+                .delete_domain_name(DomainName=domain_name) \
+                .raises_error(
                 error_code='NotFoundException',
                 message=err_msg
             )
@@ -1501,7 +1502,7 @@ class TestDeleteApiMapping(object):
         domain_name = 'unknown_domain'
         err_msg = 'The resource specified in the request was not found.'
         stubbed_session.stub('apigateway') \
-            .delete_base_path_mapping(
+                .delete_base_path_mapping(
                 domainName=domain_name,
                 basePath='foo'
             ).raises_error(
@@ -1551,7 +1552,7 @@ class TestGetRoleArn(object):
         # Need len(20) to pass param validation.
         good_arn = 'good_arn' * 3
         role_id = 'abcd' * 4
-        today = datetime.datetime.today()
+        today = datetime.datetime.now()
         stubbed_session.stub('iam').get_role(RoleName='Yes').returns({
             'Role': {
                 'Path': '/',
@@ -1589,7 +1590,7 @@ class TestGetRoleArn(object):
 
 class TestGetRole(object):
     def test_get_role_success(self, stubbed_session):
-        today = datetime.datetime.today()
+        today = datetime.datetime.now()
         response = {
             'Role': {
                 'Path': '/',
@@ -1621,7 +1622,7 @@ class TestCreateRole(object):
     def test_create_role(self, stubbed_session):
         arn = 'good_arn' * 3
         role_id = 'abcd' * 4
-        today = datetime.datetime.today()
+        today = datetime.datetime.now()
         stubbed_session.stub('iam').create_role(
             RoleName='role_name',
             AssumeRolePolicyDocument=json.dumps({'trust': 'policy'})
@@ -1644,7 +1645,7 @@ class TestCreateRole(object):
     def test_create_role_raises_error_on_failure(self, stubbed_session):
         arn = 'good_arn' * 3
         role_id = 'abcd' * 4
-        today = datetime.datetime.today()
+        today = datetime.datetime.now()
         stubbed_session.stub('iam').create_role(
             RoleName='role_name',
             AssumeRolePolicyDocument=json.dumps({'trust': 'policy'})

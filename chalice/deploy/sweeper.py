@@ -52,9 +52,7 @@ class ResourceSweeper(object):
                             if instruction.name == 'topic' and
                             isinstance(instruction,
                                        models.RecordResourceValue)][0]
-        if referenced_topic.value != existing_topic:
-            return name
-        return None
+        return name if referenced_topic.value != existing_topic else None
 
     def _determine_s3_event(self, name, resource_values):
         # type: (str, Dict[str, str]) -> Optional[str]
@@ -70,9 +68,7 @@ class ResourceSweeper(object):
                   if instruction.name == 'bucket' and
                   isinstance(instruction,
                              models.RecordResourceValue)][0]
-        if bucket.value != resource_values['bucket']:
-            return name
-        return None
+        return name if bucket.value != resource_values['bucket'] else None
 
     def _determine_sqs_event(self, name, resource_values):
         # type: (str, Dict[str, str]) -> Optional[str]
@@ -81,9 +77,7 @@ class ResourceSweeper(object):
                             if instruction.name == 'queue' and
                             isinstance(instruction,
                                        models.RecordResourceValue)][0]
-        if referenced_queue.value != existing_queue:
-            return name
-        return None
+        return name if referenced_queue.value != existing_queue else None
 
     def _determine_kinesis_event(self, name, resource_values):
         # type: (str, Dict[str, str]) -> Optional[str]
@@ -92,9 +86,7 @@ class ResourceSweeper(object):
                              if instruction.name == 'stream' and
                              isinstance(instruction,
                                         models.RecordResourceValue)][0]
-        if referenced_stream.value != existing_stream:
-            return name
-        return None
+        return name if referenced_stream.value != existing_stream else None
 
     def _determine_dynamodb_event(self, name, resource_values):
         # type: (str, Dict[str, str]) -> Optional[str]
@@ -103,9 +95,7 @@ class ResourceSweeper(object):
                              if instruction.name == 'stream_arn' and
                              isinstance(instruction,
                                         models.RecordResourceValue)][0]
-        if referenced_stream.value != existing_stream_arn:
-            return name
-        return None
+        return name if referenced_stream.value != existing_stream_arn else None
 
     def _determine_domain_name(self, name, resource_values):
         # type: (str, Dict[str, Any]) -> Optional[List[str]]
@@ -136,11 +126,7 @@ class ResourceSweeper(object):
             deployed_api_mappings_ids - planned_api_mappings_ids
         )
 
-        result_api_mappings = [
-            "%s.api_mapping.%s" % (name, api_map)
-            for api_map in api_mappings_to_remove
-        ]
-        return result_api_mappings
+        return [f"{name}.api_mapping.{api_map}" for api_map in api_mappings_to_remove]
 
     def _determine_remaining(self, deployed):
         # type: (DeployedResources) -> List[str]
@@ -152,10 +138,9 @@ class ResourceSweeper(object):
             if name not in self.marked:
                 remaining.append(name)
             elif resource_values['resource_type'] in self.specific_resources:
-                method = '_determine_%s' % resource_values['resource_type']
+                method = f"_determine_{resource_values['resource_type']}"
                 handler = getattr(self, method)
-                resource_name = handler(name, resource_values)
-                if resource_name:
+                if resource_name := handler(name, resource_values):
                     if isinstance(resource_name, list):
                         remaining.extend(resource_name)
                     else:
@@ -372,8 +357,7 @@ class ResourceSweeper(object):
 
     def _default_delete(self, resource_values):
         # type: (Dict[str, Any]) -> None
-        err_msg = "Sweeper encountered an unknown resource: %s" % \
-                  resource_values
+        err_msg = f"Sweeper encountered an unknown resource: {resource_values}"
         raise RuntimeError(err_msg)
 
     def _update_plan(self, instructions, message=None, insert=False):
@@ -404,11 +388,9 @@ class ResourceSweeper(object):
             if api_map['key'] == path_key
         }  # type: Dict[str, str]
 
-        resource_data = self._delete_api_mapping(
-            resource_values['domain_name'],
-            api_mapping
+        return self._delete_api_mapping(
+            resource_values['domain_name'], api_mapping
         )
-        return resource_data
 
     def _plan_deletion(self,
                        remaining,  # type: List[str]
@@ -426,7 +408,7 @@ class ResourceSweeper(object):
                 handler_args.append(name)
                 insert = True
 
-            method_name = '_delete_%s' % resource_type
+            method_name = f'_delete_{resource_type}'
             handler = getattr(self, method_name, self._default_delete)
             resource_data = handler(*handler_args)
             instructions = cast(

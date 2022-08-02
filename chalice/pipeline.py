@@ -21,28 +21,21 @@ def create_buildspec_v2(pipeline_params):
          "--s3-bucket ${APP_S3_BUCKET} "
          "--output-template-file transformed.yaml")
     ]
-    buildspec = {
+    return {
         "version": "0.2",
         "phases": {
             "install": {
                 "commands": install_commands,
                 "runtime-versions": {
                     "python": pipeline_params.py_major_minor,
-                }
+                },
             },
             "build": {
                 "commands": build_commands,
-            }
+            },
         },
-        "artifacts": {
-            "type": "zip",
-            "files": [
-                "transformed.yaml"
-            ]
-        }
-
+        "artifacts": {"type": "zip", "files": ["transformed.yaml"]},
     }
-    return buildspec
 
 
 def create_buildspec_legacy(pipeline_params):
@@ -58,26 +51,22 @@ def create_buildspec_legacy(pipeline_params):
             ' --s3-bucket ${APP_S3_BUCKET} '
             '--output-template-file transformed.yaml'),
     ]
-    buildspec = {
+    return {
         'version': '0.1',
         'phases': {
             'install': {
                 'commands': install_commands,
             }
         },
-        'artifacts': {
-            'type': 'zip',
-            'files': ['transformed.yaml']
-        }
+        'artifacts': {'type': 'zip', 'files': ['transformed.yaml']},
     }
-    return buildspec
 
 
 class InvalidCodeBuildPythonVersion(Exception):
     def __init__(self, version, msg=None):
         # type: (str, Optional[str]) -> None
         if msg is None:
-            msg = 'CodeBuild does not yet support python version %s.' % version
+            msg = f'CodeBuild does not yet support python version {version}.'
         super(InvalidCodeBuildPythonVersion, self).__init__(msg)
 
 
@@ -111,9 +100,9 @@ class PipelineParameters(object):
     def _lock_to_minor_version(self):
         # type: () -> str
         parts = [int(p) for p in chalice_version.split('.')]
-        min_version = '%s.%s.%s' % (parts[0], parts[1], 0)
-        max_version = '%s.%s.%s' % (parts[0], parts[1] + 1, 0)
-        return '>=%s,<%s' % (min_version, max_version)
+        min_version = f'{parts[0]}.{parts[1]}.0'
+        max_version = f'{parts[0]}.{parts[1] + 1}.0'
+        return f'>={min_version},<{max_version}'
 
 
 class BasePipelineTemplate(object):
@@ -165,9 +154,7 @@ class CreatePipelineTemplateV2(BasePipelineTemplate):
         if (major, minor) < (3, 7):
             raise InvalidCodeBuildPythonVersion(
                 python_version,
-                'This CodeBuild image does not support python version: %s' % (
-                    python_version
-                )
+                f'This CodeBuild image does not support python version: {python_version}',
             )
 
 
@@ -221,7 +208,7 @@ class CreatePipelineTemplateLegacy(BasePipelineTemplate):
             return params.codebuild_image
         try:
             image_suffix = self._CODEBUILD_IMAGE[params.lambda_python_version]
-            return 'aws/codebuild/%s' % image_suffix
+            return f'aws/codebuild/{image_suffix}'
         except KeyError as e:
             raise InvalidCodeBuildPythonVersion(str(e))
 
@@ -481,8 +468,7 @@ class CodePipeline(BaseResource):
         # the various stages they want created. For now, there's
         # a fixed list.
         stages = []
-        source = self._create_source_stage(pipeline_params)
-        if source:
+        if source := self._create_source_stage(pipeline_params):
             stages.append(source)
         stages.extend([self._create_build_stage(), self._create_beta_stage()])
         return stages
@@ -708,5 +694,4 @@ class BuildSpecExtractor(object):
         # type: (Dict[str, Any]) -> str
         source = template['Resources']['AppPackageBuild'][
             'Properties']['Source']
-        buildspec = source.pop('BuildSpec')
-        return buildspec
+        return source.pop('BuildSpec')

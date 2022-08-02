@@ -52,8 +52,7 @@ def sdist_reader():
 
 @pytest.fixture
 def sdist_builder():
-    s = FakeSdistBuilder()
-    return s
+    return FakeSdistBuilder()
 
 
 class FakeSdistBuilder(object):
@@ -66,8 +65,8 @@ class FakeSdistBuilder(object):
     )
 
     def write_fake_sdist(self, directory, name, version):
-        filename = '%s-%s.zip' % (name, version)
-        path = '%s/%s' % (directory, filename)
+        filename = f'{name}-{version}.zip'
+        path = f'{directory}/{filename}'
         with zipfile.ZipFile(path, 'w',
                              compression=zipfile.ZIP_DEFLATED) as z:
             z.writestr('sdist/setup.py', self._SETUP_PY % (name, version))
@@ -185,17 +184,18 @@ class PipSideEffect(object):
 
     def execute(self, args):
         """Generate the file in the target_dir."""
-        if self._dirarg:
-            target_dir = None
-            for i, arg in enumerate(args):
-                if arg == self._dirarg:
-                    target_dir = args[i+1]
-            if target_dir:
-                filepath = os.path.join(target_dir, self._filename)
-                if filepath.endswith('.whl'):
-                    self._build_fake_whl(target_dir, self._filename)
-                else:
-                    self._build_fake_sdist(filepath)
+        if not self._dirarg:
+            return
+        target_dir = None
+        for i, arg in enumerate(args):
+            if arg == self._dirarg:
+                target_dir = args[i+1]
+        if target_dir:
+            filepath = os.path.join(target_dir, self._filename)
+            if filepath.endswith('.whl'):
+                self._build_fake_whl(target_dir, self._filename)
+            else:
+                self._build_fake_sdist(filepath)
 
 
 @pytest.fixture
@@ -769,7 +769,7 @@ class TestDependencyBuilder(object):
     )
     def test_whitelist_sqlalchemy(self, tmpdir, osutils, pip_runner,
                                   package, package_filename):
-        reqs = ['%s==1.1.18' % package]
+        reqs = [f'{package}==1.1.18']
         abi = 'cp36m'
         pip, runner = pip_runner
         appdir, builder = self._make_appdir_and_dependency_builder(
@@ -778,22 +778,29 @@ class TestDependencyBuilder(object):
         pip.packages_to_download(
             expected_args=['-r', requirements_file, '--dest', mock.ANY],
             packages=[
-                '%s-1.1.18-cp36-cp36m-macosx_10_11_x86_64.whl'
-                % package_filename
-            ]
+                f'{package_filename}-1.1.18-cp36-cp36m-macosx_10_11_x86_64.whl'
+            ],
         )
+
         pip.packages_to_download(
             expected_args=[
-                '--only-binary=:all:', '--no-deps', '--platform',
-                'manylinux2014_x86_64', '--implementation', 'cp',
-                '--abi', abi, '--dest', mock.ANY,
-                '%s==1.1.18' % package
+                '--only-binary=:all:',
+                '--no-deps',
+                '--platform',
+                'manylinux2014_x86_64',
+                '--implementation',
+                'cp',
+                '--abi',
+                abi,
+                '--dest',
+                mock.ANY,
+                f'{package}==1.1.18',
             ],
             packages=[
-                '%s-1.1.18-cp36-cp36m-macosx_10_11_x86_64.whl'
-                % package_filename
-            ]
+                f'{package_filename}-1.1.18-cp36-cp36m-macosx_10_11_x86_64.whl'
+            ],
         )
+
         site_packages = os.path.join(appdir, '.chalice.', 'site-packages')
         builder.build_site_packages(abi, requirements_file, site_packages)
         installed_packages = os.listdir(site_packages)
@@ -1036,8 +1043,8 @@ def test_will_create_outdir_if_needed(tmpdir, stubbed_session):
                            **default_params)
     options = PackageOptions(TypedAWSClient(session=stubbed_session))
     p = package.create_app_packager(config, options)
-    p.package_app(config, str(outdir), 'dev')
-    contents = os.listdir(str(outdir))
+    p.package_app(config, outdir, 'dev')
+    contents = os.listdir(outdir)
     assert 'deployment.zip' in contents
     assert 'sam.json' in contents
 
@@ -1053,8 +1060,8 @@ def test_includes_layer_package_with_sam(tmpdir, stubbed_session):
                            **default_params)
     options = PackageOptions(TypedAWSClient(session=stubbed_session))
     p = package.create_app_packager(config, options)
-    p.package_app(config, str(outdir), 'dev')
-    contents = os.listdir(str(outdir))
+    p.package_app(config, outdir, 'dev')
+    contents = os.listdir(outdir)
     assert 'deployment.zip' in contents
     assert 'layer-deployment.zip' in contents
     assert 'sam.json' in contents
@@ -1072,8 +1079,8 @@ def test_includes_layer_package_with_terraform(tmpdir, stubbed_session):
     options = PackageOptions(TypedAWSClient(session=stubbed_session))
     p = package.create_app_packager(config, options,
                                     package_format='terraform')
-    p.package_app(config, str(outdir), 'dev')
-    contents = os.listdir(str(outdir))
+    p.package_app(config, outdir, 'dev')
+    contents = os.listdir(outdir)
     assert 'deployment.zip' in contents
     assert 'layer-deployment.zip' in contents
     assert 'chalice.tf.json' in contents
@@ -1120,8 +1127,8 @@ class TestSdistMetadataFetcher(object):
 
     def _write_fake_sdist(self, setup_py, directory, ext,
                           pkg_info_contents=None):
-        filename = 'sdist.%s' % ext
-        path = '%s/%s' % (directory, filename)
+        filename = f'sdist.{ext}'
+        path = f'{directory}/{filename}'
         if ext == 'zip':
             with zipfile.ZipFile(path, 'w',
                                  compression=zipfile.ZIP_DEFLATED) as z:
@@ -1130,7 +1137,7 @@ class TestSdistMetadataFetcher(object):
                     z.writestr('sdist/PKG-INFO', pkg_info_contents)
         elif ext in self._VALID_TAR_FORMATS:
             compression_format = ext.split('.')[1]
-            with tarfile.open(path, 'w:%s' % compression_format) as tar:
+            with tarfile.open(path, f'w:{compression_format}') as tar:
                 tarinfo = tarfile.TarInfo('sdist/setup.py')
                 tarinfo.size = len(setup_py)
                 tar.addfile(tarinfo, io.BytesIO(setup_py.encode()))
@@ -1141,8 +1148,7 @@ class TestSdistMetadataFetcher(object):
                                 io.BytesIO(pkg_info_contents.encode()))
         else:
             open(path, 'a').close()
-        filepath = os.path.join(directory, filename)
-        return filepath
+        return os.path.join(directory, filename)
 
     def test_setup_tar_gz(self, osutils, sdist_reader):
         setup_py = self._SETUP_PY % (
@@ -1303,8 +1309,7 @@ class TestPackage(object):
     def test_same_pkg_sdist_and_wheel_collide(self, osutils, sdist_builder):
         with osutils.tempdir() as tempdir:
             sdist_builder.write_fake_sdist(tempdir, 'foobar', '1.0')
-            pkgs = set()
-            pkgs.add(Package('', 'foobar-1.0-py3-none-any.whl'))
+            pkgs = {Package('', 'foobar-1.0-py3-none-any.whl')}
             pkgs.add(Package(tempdir, 'foobar-1.0.zip'))
             assert len(pkgs) == 1
 
@@ -1312,8 +1317,7 @@ class TestPackage(object):
                                                          sdist_builder):
         with osutils.tempdir() as tempdir:
             sdist_builder.write_fake_sdist(tempdir, 'Foobar', '1.0')
-            pkgs = set()
-            pkgs.add(Package('', 'foobar-1.0-py3-none-any.whl'))
+            pkgs = {Package('', 'foobar-1.0-py3-none-any.whl')}
             pkgs.add(Package(tempdir, 'Foobar-1.0.zip'))
             assert len(pkgs) == 1
 
@@ -1321,7 +1325,6 @@ class TestPackage(object):
                                                          sdist_builder):
         with osutils.tempdir() as tempdir:
             sdist_builder.write_fake_sdist(tempdir, 'foobar', '1.0')
-            pkgs = set()
-            pkgs.add(Package('', 'Foobar-1.0-py3-none-any.whl'))
+            pkgs = {Package('', 'Foobar-1.0-py3-none-any.whl')}
             pkgs.add(Package(tempdir, 'foobar-1.0.zip'))
             assert len(pkgs) == 1

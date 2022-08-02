@@ -43,8 +43,7 @@ class FakeTimeSource(object):
 
         This is for mimicing the Clock interface used in local.
         """
-        time = self._times.pop(0)
-        return time
+        return self._times.pop(0)
 
 
 class ChaliceStubbedHandler(local.ChaliceRequestHandler):
@@ -330,8 +329,7 @@ def _get_raw_body_from_response_stream(handler):
     # response headers in the raw stream.  We just care about the
     # body for now so we'll split lines.
     raw_response = handler.wfile.getvalue()
-    body = raw_response.splitlines()[-1]
-    return body
+    return raw_response.splitlines()[-1]
 
 
 def _get_body_from_response_stream(handler):
@@ -1094,8 +1092,8 @@ class TestArnBuilder(object):
 ])
 def test_can_allow_route_arns(arn, pattern):
     prefix = 'arn:aws:execute-api:'
-    full_arn = '%s%s' % (prefix, arn)
-    full_pattern = '%s%s' % (prefix, pattern)
+    full_arn = f'{prefix}{arn}'
+    full_pattern = f'{prefix}{pattern}'
     matcher = local.ARNMatcher(full_arn)
     does_match = matcher.does_any_resource_match([full_pattern])
     assert does_match is True
@@ -1116,8 +1114,8 @@ def test_can_allow_route_arns(arn, pattern):
 ])
 def test_can_deny_route_arns(arn, pattern):
     prefix = 'arn:aws:execute-api:'
-    full_arn = '%s%s' % (prefix, arn)
-    full_pattern = '%s%s' % (prefix, pattern)
+    full_arn = f'{prefix}{arn}'
+    full_pattern = f'{prefix}{pattern}'
     matcher = local.ARNMatcher(full_arn)
     does_match = matcher.does_any_resource_match([full_pattern])
     assert does_match is False
@@ -1142,8 +1140,8 @@ def test_can_deny_route_arns(arn, pattern):
 ])
 def test_can_allow_multiple_resource_arns(arn, patterns):
     prefix = 'arn:aws:execute-api:'
-    full_arn = '%s%s' % (prefix, arn)
-    full_patterns = ['%s%s' % (prefix, pattern) for pattern in patterns]
+    full_arn = f'{prefix}{arn}'
+    full_patterns = [f'{prefix}{pattern}' for pattern in patterns]
     matcher = local.ARNMatcher(full_arn)
     does_match = matcher.does_any_resource_match(full_patterns)
     assert does_match is True
@@ -1163,8 +1161,8 @@ def test_can_allow_multiple_resource_arns(arn, patterns):
 ])
 def test_can_deny_multiple_resource_arns(arn, patterns):
     prefix = 'arn:aws:execute-api:'
-    full_arn = '%s%s' % (prefix, arn)
-    full_patterns = ['%s%s' % (prefix, pattern) for pattern in patterns]
+    full_arn = f'{prefix}{arn}'
+    full_patterns = [f'{prefix}{pattern}' for pattern in patterns]
     matcher = local.ARNMatcher(full_arn)
     does_match = matcher.does_any_resource_match(full_patterns)
     assert does_match is False

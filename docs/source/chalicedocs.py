@@ -13,10 +13,10 @@ CONTROL_HEIGHT = 30
 def get_size(d, key):
     if key not in d:
         return None
-    m = re.match("(\d+)(|%|px)$", d[key])
-    if not m:
+    if m := re.match("(\d+)(|%|px)$", d[key]):
+        return int(m[1]), m[2] or "px"
+    else:
         raise ValueError("invalid size %r" % d[key])
-    return int(m.group(1)), m.group(2) or "px"
 
 
 def css(d):
@@ -52,10 +52,6 @@ def visit_youtube_node(self, node):
             "height": "100%",
             "border": "0",
         }
-        attrs = {
-            "src": "https://www.youtube.com/embed/%s" % node["id"],
-            "style": css(style),
-        }
     else:
         if width is None:
             if height is None:
@@ -69,11 +65,12 @@ def visit_youtube_node(self, node):
             "height": "%d%s" % (height[0] + CONTROL_HEIGHT, height[1]),
             "border": "0",
         }
-        attrs = {
-            "src": "https://www.youtube.com/embed/%s" % node["id"],
-            "style": css(style),
-        }
-    attrs["allowfullscreen"] = "true"
+    attrs = {
+        "src": f'https://www.youtube.com/embed/{node["id"]}',
+        "style": css(style),
+        "allowfullscreen": "true",
+    }
+
     div_attrs = {
         "CLASS": "youtube-wrapper",
         "style": css(div_style),

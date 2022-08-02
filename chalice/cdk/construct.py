@@ -97,7 +97,9 @@ class Chalice(cdk.Construct):
             self, 'ChaliceAppCode', path=deployment_zip_path)
         sam_template_path = os.path.join(self._sam_package_dir, 'sam.json')
         sam_template_with_assets_path = os.path.join(
-            chalice_out_dir, '%s.sam_with_assets.json' % package_id)
+            chalice_out_dir, f'{package_id}.sam_with_assets.json'
+        )
+
 
         with open(sam_template_path) as sam_template_file:
             sam_template = json.load(sam_template_file)
@@ -158,5 +160,4 @@ class Chalice(cdk.Construct):
     def add_environment_variable(self, key, value, function_name):
         # type: (str, str, str) -> None
         cfn_function = self.sam_template.get_resource(function_name)
-        cfn_function.add_override(
-            'Properties.Environment.Variables.%s' % key, value)
+        cfn_function.add_override(f'Properties.Environment.Variables.{key}', value)

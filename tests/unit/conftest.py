@@ -21,7 +21,7 @@ settings.register_profile(
 settings.register_profile('dev', settings(max_examples=10))
 settings.load_profile(os.getenv('HYPOTHESIS_PROFILE', 'dev'))
 
-print("HYPOTHESIS PROFILE: %s" % os.environ.get("HYPOTHESIS_PROFILE"))
+print(f'HYPOTHESIS PROFILE: {os.environ.get("HYPOTHESIS_PROFILE")}')
 
 
 @fixture(autouse=True)

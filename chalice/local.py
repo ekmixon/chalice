@@ -103,15 +103,11 @@ class ARNMatcher(object):
         escaped_resource = re.escape(resource)
         resource_regex = escaped_resource.replace(r'\?', '.').replace(
             r'\*', '.*?')
-        resource_regex = '^%s$' % resource_regex
+        resource_regex = f'^{resource_regex}$'
         return re.match(resource_regex, self._arn) is not None
 
     def does_any_resource_match(self, resources):
-        # type: (List[str]) -> bool
-        for resource in resources:
-            if self._resource_match(resource):
-                return True
-        return False
+        return any(self._resource_match(resource) for resource in resources)
 
 
 class RouteMatcher(object):
@@ -156,7 +152,7 @@ class RouteMatcher(object):
                         break
                 else:
                     return MatchResult(route_url, captured, query_params)
-        raise ValueError("No matching route found for: %s" % url)
+        raise ValueError(f"No matching route found for: {url}")
 
 
 class LambdaEventConverter(object):
@@ -191,12 +187,7 @@ class LambdaEventConverter(object):
             'pathParameters': view_route.captured,
             'stageVariables': {},
         }
-        if view_route.query_params:
-            event['multiValueQueryStringParameters'] = view_route.query_params
-        else:
-            # If no query parameters are provided, API gateway maps
-            # this to None so we're doing this for parity.
-            event['multiValueQueryStringParameters'] = None
+        event['multiValueQueryStringParameters'] = view_route.query_params or None
         if self._is_binary(headers) and body is not None:
             event['body'] = base64.b64encode(body).decode('ascii')
             event['isBase64Encoded'] = True
@@ -317,33 +308,35 @@ class LocalGatewayAuthorizer(object):
             return lambda_event, lambda_context
         # If authorizer is Cognito then try to parse the JWT and simulate an
         # APIGateway validated request
-        if isinstance(authorizer, CognitoUserPoolAuthorizer):
-            if "headers" in lambda_event\
-                    and "authorization" in lambda_event["headers"]:
-                token = lambda_event["headers"]["authorization"]
-                claims = self._decode_jwt_payload(token)
+        if (
+            isinstance(authorizer, CognitoUserPoolAuthorizer)
+            and "headers" in lambda_event
+            and "authorization" in lambda_event["headers"]
+        ):
+            token = lambda_event["headers"]["authorization"]
+            claims = self._decode_jwt_payload(token)
 
-                try:
-                    cognito_username = claims["cognito:username"]
-                except KeyError:
-                    # If a key error is raised when trying to get the cognito
-                    # username then it is a machine-to-machine communication.
-                    # This kind of cognito authorization flow is not
-                    # supported in local mode. We can ignore it here to allow
-                    # users to test their code local with a different cognito
-                    # authorization flow.
-                    warnings.warn(
-                        '%s for machine-to-machine communicaiton is not '
-                        'supported in local mode. All requests made against '
-                        'a route will be authorized to allow local testing.'
-                        % authorizer.__class__.__name__
-                    )
-                    return lambda_event, lambda_context
+            try:
+                cognito_username = claims["cognito:username"]
+            except KeyError:
+                # If a key error is raised when trying to get the cognito
+                # username then it is a machine-to-machine communication.
+                # This kind of cognito authorization flow is not
+                # supported in local mode. We can ignore it here to allow
+                # users to test their code local with a different cognito
+                # authorization flow.
+                warnings.warn(
+                    '%s for machine-to-machine communicaiton is not '
+                    'supported in local mode. All requests made against '
+                    'a route will be authorized to allow local testing.'
+                    % authorizer.__class__.__name__
+                )
+                return lambda_event, lambda_context
 
-                auth_result = {"context": {"claims": claims},
-                               "principalId": cognito_username}
-                lambda_event = self._update_lambda_event(lambda_event,
-                                                         auth_result)
+            auth_result = {"context": {"claims": claims},
+                           "principalId": cognito_username}
+            lambda_event = self._update_lambda_event(lambda_event,
+                                                     auth_result)
         if not isinstance(authorizer, ChaliceAuthorizer):
             # Currently the only supported local authorizer is the
             # BuiltinAuthConfig type. Anything else we will err on the side of
@@ -365,8 +358,7 @@ class LocalGatewayAuthorizer(object):
                  'x-amzn-ErrorType': 'AuthorizerConfigurationException'},
                 b'{"message":null}'
             )
-        authed = self._check_can_invoke_view_function(arn, auth_result)
-        if authed:
+        if authed := self._check_can_invoke_view_function(arn, auth_result):
             lambda_event = self._update_lambda_event(lambda_event, auth_result)
         else:
             raise ForbiddenError(
@@ -383,11 +375,9 @@ class LocalGatewayAuthorizer(object):
         allow_resource_statements = []
         for statement in statements:
             if statement.get('Effect') == 'Allow' and \
-                    (statement.get('Action') == 'execute-api:Invoke' or
+                        (statement.get('Action') == 'execute-api:Invoke' or
                      'execute-api:Invoke' in statement.get('Action')):
-                for resource in statement.get('Resource'):
-                    allow_resource_statements.append(resource)
-
+                allow_resource_statements.extend(iter(statement.get('Resource')))
         arn_matcher = ARNMatcher(arn)
         return arn_matcher.does_any_resource_match(allow_resource_statements)
 
@@ -472,12 +462,12 @@ class LocalGateway(object):
         )
 
     def _generate_lambda_event(self, method, path, headers, body):
-        # type: (str, str, HeaderType, Optional[bytes]) -> EventType
-        lambda_event = self.event_converter.create_lambda_event(
-            method=method, path=path, headers=headers,
+        return self.event_converter.create_lambda_event(
+            method=method,
+            path=path,
+            headers=headers,
             body=body,
         )
-        return lambda_event
 
     def _has_user_defined_options_method(self, lambda_event):
         # type: (EventType) -> bool
@@ -523,7 +513,7 @@ class LocalGateway(object):
         # *or* this is a preflight request, which chalice automatically
         # responds to without invoking a user defined route.
         if method == 'OPTIONS' and \
-           not self._has_user_defined_options_method(lambda_event):
+               not self._has_user_defined_options_method(lambda_event):
             # No options route was defined for this path. API Gateway should
             # automatically generate our CORS headers.
             options_headers = self._autogen_options_headers(lambda_event)
@@ -539,8 +529,7 @@ class LocalGateway(object):
         # 401 will be sent back over the wire.
         lambda_event, lambda_context = self._authorizer.authorize(
             path, lambda_event, lambda_context)
-        response = self._app_object(lambda_event, lambda_context)
-        return response
+        return self._app_object(lambda_event, lambda_context)
 
     def _autogen_options_headers(self, lambda_event):
         # type:(EventType) -> HeaderType
@@ -569,9 +558,10 @@ class LocalGateway(object):
         # The Access-Control-Allow-Methods header is not added by the
         # CORSConfig object it is added to the API Gateway route during
         # deployment, so we need to manually add those headers here.
-        cors_headers.update({
-            'Access-Control-Allow-Methods': '%s' % ','.join(route_methods)
-        })
+        cors_headers.update(
+            {'Access-Control-Allow-Methods': f"{','.join(route_methods)}"}
+        )
+
         return cors_headers
 
 
@@ -586,11 +576,8 @@ class ChaliceRequestHandler(BaseHTTPRequestHandler):
             self, request, client_address, server)  # type: ignore
 
     def _parse_payload(self):
-        # type: () -> Tuple[HeaderType, Optional[bytes]]
-        body = None
         content_length = int(self.headers.get('content-length', '0'))
-        if content_length > 0:
-            body = self.rfile.read(content_length)
+        body = self.rfile.read(content_length) if content_length > 0 else None
         converted_headers = dict(self.headers)
         return converted_headers, body
 
@@ -697,7 +684,7 @@ class LocalDevServer(object):
 
     def serve_forever(self):
         # type: () -> None
-        print("Serving on http://%s:%s" % (self.host, self.port))
+        print(f"Serving on http://{self.host}:{self.port}")
         self.server.serve_forever()
 
     def shutdown(self):

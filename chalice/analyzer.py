@@ -56,8 +56,7 @@ def get_client_calls(source_code):
     t = SymbolTableTypeInfer(parsed)
     binder = t.bind_types()
     collector = APICallCollector(binder)
-    api_calls = collector.collect_api_calls(parsed.parsed_ast)
-    return api_calls
+    return collector.collect_api_calls(parsed.parsed_ast)
 
 
 def get_client_calls_for_app(source_code):
@@ -73,8 +72,7 @@ def get_client_calls_for_app(source_code):
     t = AppViewTypeInfer(parsed)
     binder = t.bind_types()
     collector = APICallCollector(binder)
-    api_calls = collector.collect_api_calls(parsed.parsed_ast)
-    return api_calls
+    return collector.collect_api_calls(parsed.parsed_ast)
 
 
 def parse_code(source_code, filename='app.py'):
@@ -87,7 +85,7 @@ def parse_code(source_code, filename='app.py'):
 class BaseType(object):
     def __repr__(self):
         # type: () -> str
-        return "%s()" % self.__class__.__name__
+        return f"{self.__class__.__name__}()"
 
     def __eq__(self, other):
         # type: (Any) -> bool
@@ -127,13 +125,15 @@ class Boto3ClientType(BaseType):
         # NOTE: We can't use self.__class__ because of a mypy bug:
         # https://github.com/python/mypy/issues/3061
         # We can change this back once that bug is fixed.
-        if not isinstance(other, Boto3ClientType):
-            return False
-        return self.service_name == other.service_name
+        return (
+            self.service_name == other.service_name
+            if isinstance(other, Boto3ClientType)
+            else False
+        )
 
     def __repr__(self):
         # type: () -> str
-        return "%s(%s)" % (self.__class__.__name__, self.service_name)
+        return f"{self.__class__.__name__}({self.service_name})"
 
 
 class Boto3ClientMethodType(BaseType):
@@ -152,11 +152,7 @@ class Boto3ClientMethodType(BaseType):
 
     def __repr__(self):
         # type: () -> str
-        return "%s(%s, %s)" % (
-            self.__class__.__name__,
-            self.service_name,
-            self.method_name
-        )
+        return f"{self.__class__.__name__}({self.service_name}, {self.method_name})"
 
 
 class Boto3ClientMethodCallType(Boto3ClientMethodType):
@@ -181,10 +177,7 @@ class FunctionType(BaseType):
 
     def __repr__(self):
         # type: () -> str
-        return "%s(%s)" % (
-            self.__class__.__name__,
-            self.return_type,
-        )
+        return f"{self.__class__.__name__}({self.return_type})"
 
 
 class StringLiteral(object):
@@ -268,16 +261,16 @@ class ChainedSymbolTable(object):
     def lookup_sub_namespace(self, name, lineno=None):
         # type: (str, Optional[int]) -> ChainedSymbolTable
         for child in self._local_table.get_children():
-            if child.get_name() == name:
-                if lineno is not None:
-                    if child.get_lineno() == lineno:
-                        return self.__class__(child, self._local_table)
-                else:
-                    return self.__class__(child, self._local_table)
+            if child.get_name() == name and (
+                lineno is not None
+                and child.get_lineno() == lineno
+                or lineno is None
+            ):
+                return self.__class__(child, self._local_table)
         for child in self._global_table.get_children():
             if child.get_name() == name:
                 return self.__class__(child, self._global_table)
-        raise ValueError("Unknown symbol name: %s" % name)
+        raise ValueError(f"Unknown symbol name: {name}")
 
     def get_sub_namespaces(self):
         # type: () -> List[symtable.SymbolTable]
@@ -304,8 +297,7 @@ class ChainedSymbolTable(object):
         try:
             return cast(TypedSymbol, symbol).ast_node
         except AttributeError:
-            raise ValueError(
-                "No AST node registered for symbol: %s" % name)
+            raise ValueError(f"No AST node registered for symbol: {name}")
 
     def has_ast_node_for_symbol(self, name):
         # type: (str) -> bool
@@ -380,9 +372,7 @@ class SymbolTableTypeInfer(ast.NodeVisitor):
         return self._binder.get_type_for_node(node)
 
     def _new_inference_scope(self, parsed_code, binder, visited):
-        # type: (ParsedCode, TypeBinder, Set[ast.AST]) -> SymbolTableTypeInfer
-        instance = self.__class__(parsed_code, binder, visited)
-        return instance
+        return self.__class__(parsed_code, binder, visited)
 
     def visit_Import(self, node):
         # type: (ast.Import) -> None
@@ -409,11 +399,9 @@ class SymbolTableTypeInfer(ast.NodeVisitor):
         # run on the children first.
         self.generic_visit(node)
         rhs_inferred_type = self._get_inferred_type_for_node(node.value)
-        if rhs_inferred_type is None:
-            # Special casing assignment to a string literal.
-            if isinstance(node.value, ast.Str):
-                rhs_inferred_type = StringLiteral(node.value.s)
-                self._set_inferred_type_for_node(node.value, rhs_inferred_type)
+        if rhs_inferred_type is None and isinstance(node.value, ast.Str):
+            rhs_inferred_type = StringLiteral(node.value.s)
+            self._set_inferred_type_for_node(node.value, rhs_inferred_type)
         for t in node.targets:
             if isinstance(t, ast.Name):
                 self._symbol_table.set_inferred_type(t.id, rhs_inferred_type)
@@ -603,15 +591,10 @@ class SymbolTableTypeInfer(ast.NodeVisitor):
         if node.generators:
             first_generator = node.generators[0]
             child_nodes.append(first_generator.target)
-            for if_expr in first_generator.ifs:
-                child_nodes.append(if_expr)
-
+            child_nodes.extend(iter(first_generator.ifs))
         for generator in node.generators[1:]:
-            # rest need to be visited in the child scope
-            child_nodes.append(generator.iter)
-            child_nodes.append(generator.target)
-            for if_expr in generator.ifs:
-                child_nodes.append(if_expr)
+            child_nodes.extend((generator.iter, generator.target))
+            child_nodes.extend(iter(generator.ifs))
         return child_nodes
 
     def _visit_comprehension_children(self, node, comprehension_type):
@@ -651,11 +634,14 @@ class SymbolTableTypeInfer(ast.NodeVisitor):
         if len(namespaces) == 1:
             # if there's only one match for the name, return it
             return namespaces[0]
-        for namespace in namespaces:
-            # otherwise disambiguate by using the line number
-            if namespace.get_lineno() == lineno:
-                return namespace
-        return None
+        return next(
+            (
+                namespace
+                for namespace in namespaces
+                if namespace.get_lineno() == lineno
+            ),
+            None,
+        )
 
     def visit(self, node):
         # type: (Any) -> None
@@ -700,11 +686,13 @@ class AppViewTypeInfer(ast.NodeVisitor):
         # is to infer the Chalice type and ensure the function is
         # decorated with the Chalice type's route() method.
         decorator_list = node.decorator_list
-        if not decorator_list:
-            return False
-        for decorator in decorator_list:
-            if isinstance(decorator, ast.Call) and \
-                    isinstance(decorator.func, ast.Attribute):
-                if decorator.func.attr in self._CHALICE_DECORATORS:
-                    return True
-        return False
+        return (
+            any(
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Attribute)
+                and decorator.func.attr in self._CHALICE_DECORATORS
+                for decorator in decorator_list
+            )
+            if decorator_list
+            else False
+        )

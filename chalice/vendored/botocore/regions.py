@@ -96,10 +96,10 @@ class EndpointResolver(BaseEndpointResolver):
         self._endpoint_data = endpoint_data
 
     def get_available_partitions(self):
-        result = []
-        for partition in self._endpoint_data['partitions']:
-            result.append(partition['partition'])
-        return result
+        return [
+            partition['partition']
+            for partition in self._endpoint_data['partitions']
+        ]
 
     def get_available_endpoints(self, service_name, partition_name='aws',
                                 allow_non_regional=False):
@@ -110,9 +110,12 @@ class EndpointResolver(BaseEndpointResolver):
             services = partition['services']
             if service_name not in services:
                 continue
-            for endpoint_name in services[service_name]['endpoints']:
-                if allow_non_regional or endpoint_name in partition['regions']:
-                    result.append(endpoint_name)
+            result.extend(
+                endpoint_name
+                for endpoint_name in services[service_name]['endpoints']
+                if allow_non_regional or endpoint_name in partition['regions']
+            )
+
         return result
 
     def construct_endpoint(self, service_name, region_name=None, partition_name=None):
@@ -130,9 +133,9 @@ class EndpointResolver(BaseEndpointResolver):
 
         # Iterate over each partition until a match is found.
         for partition in self._endpoint_data['partitions']:
-            result = self._endpoint_for_partition(
-                partition, service_name, region_name)
-            if result:
+            if result := self._endpoint_for_partition(
+                partition, service_name, region_name
+            ):
                 return result
 
     def _endpoint_for_partition(self, partition, service_name, region_name,

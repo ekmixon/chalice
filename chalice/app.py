@@ -61,16 +61,14 @@ def handle_extra_types(obj):
     # It will keep only the last value for every key as it used to.
     if isinstance(obj, MultiDict):
         return dict(obj)
-    raise TypeError('Object of type %s is not JSON serializable'
-                    % obj.__class__.__name__)
+    raise TypeError(
+        f'Object of type {obj.__class__.__name__} is not JSON serializable'
+    )
 
 
 def error_response(message, error_code, http_status_code, headers=None):
     body = {'Code': error_code, 'Message': message}
-    response = Response(body=body, status_code=http_status_code,
-                        headers=headers)
-
-    return response
+    return Response(body=body, status_code=http_status_code, headers=headers)
 
 
 def _matches_content_type(content_type, valid_content_types):
@@ -107,8 +105,7 @@ class ChaliceViewError(ChaliceError):
     STATUS_CODE = 500
 
     def __init__(self, msg=''):
-        super(ChaliceViewError, self).__init__(
-            self.__class__.__name__ + ': %s' % msg)
+        super(ChaliceViewError, self).__init__(self.__class__.__name__ + f': {msg}')
 
 
 class ChaliceUnhandledError(ChaliceError):
@@ -204,7 +201,7 @@ class MultiDict(MutableMapping):  # pylint: disable=too-many-ancestors
         return iter(self._dict)
 
     def __repr__(self):
-        return 'MultiDict(%s)' % self._dict
+        return f'MultiDict({self._dict})'
 
     def __str__(self):
         return repr(self)
@@ -227,7 +224,7 @@ class CaseInsensitiveMapping(Mapping):
         return len(self._dict)
 
     def __repr__(self):
-        return 'CaseInsensitiveMapping(%s)' % repr(self._dict)
+        return f'CaseInsensitiveMapping({repr(self._dict)})'
 
 
 class Authorizer(object):
@@ -274,8 +271,9 @@ class CognitoUserPoolAuthorizer(Authorizer):
             # adding some validation to help them troubleshoot
             # potential issues.
             raise TypeError(
-                "provider_arns should be a list of ARNs, received: %s"
-                % provider_arns)
+                f"provider_arns should be a list of ARNs, received: {provider_arns}"
+            )
+
         self._provider_arns = provider_arns
         self.scopes = scopes or []
 
@@ -366,24 +364,18 @@ class CORSConfig(object):
             'Access-Control-Allow-Headers': self.allow_headers
         }
         if self._expose_headers:
-            headers.update({
-                'Access-Control-Expose-Headers': ','.join(self._expose_headers)
-            })
+            headers['Access-Control-Expose-Headers'] = ','.join(self._expose_headers)
         if self._max_age is not None:
-            headers.update({
-                'Access-Control-Max-Age': str(self._max_age)
-            })
+            headers['Access-Control-Max-Age'] = str(self._max_age)
         if self._allow_credentials is True:
-            headers.update({
-                'Access-Control-Allow-Credentials': 'true'
-            })
+            headers['Access-Control-Allow-Credentials'] = 'true'
 
         return headers
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
             return self.get_access_control_headers() == \
-                other.get_access_control_headers()
+                    other.get_access_control_headers()
         return False
 
 
@@ -395,7 +387,7 @@ class Request(object):
     def __init__(self, event_dict, lambda_context=None):
         query_params = event_dict['multiValueQueryStringParameters']
         self.query_params = None if query_params is None \
-            else MultiDict(query_params)
+                else MultiDict(query_params)
         self.headers = CaseInsensitiveMapping(event_dict['headers'])
         self.uri_params = event_dict['pathParameters']
         self.method = event_dict['requestContext']['httpMethod']
@@ -415,8 +407,7 @@ class Request(object):
     def _base64decode(self, encoded):
         if not isinstance(encoded, bytes):
             encoded = encoded.encode('ascii')
-        output = base64.b64decode(encoded)
-        return output
+        return base64.b64decode(encoded)
 
     @property
     def raw_body(self):
@@ -558,10 +549,7 @@ class RouteEntry(object):
     def _parse_view_args(self):
         if '{' not in self.uri_pattern:
             return []
-        # The [1:-1] slice is to remove the braces
-        # e.g {foobar} -> foobar
-        results = [r[1:-1] for r in _PARAMS.findall(self.uri_pattern)]
-        return results
+        return [r[1:-1] for r in _PARAMS.findall(self.uri_pattern)]
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
@@ -808,15 +796,13 @@ class DecoratorAPI(object):
             handler_name = name
             if handler_name is None:
                 handler_name = user_handler.__name__
-            if registration_kwargs is not None:
-                kwargs = registration_kwargs
-            else:
-                kwargs = {}
+            kwargs = registration_kwargs if registration_kwargs is not None else {}
             wrapped = self._wrap_handler(handler_type, handler_name,
                                          user_handler)
             self._register_handler(handler_type, handler_name,
                                    user_handler, wrapped, kwargs)
             return wrapped
+
         return _register_handler
 
     def _wrap_handler(self, handler_type, handler_name, user_handler):
@@ -896,14 +882,15 @@ class _HandlerRegistration(object):
                 kwargs['url_prefix'] = url_prefix
             # module_name is always provided if options is not None.
             module_name = options['module_name']
-        handler_string = '%s.%s' % (module_name, user_handler.__name__)
-        getattr(self, '_register_%s' % handler_type)(
+        handler_string = f'{module_name}.{user_handler.__name__}'
+        getattr(self, f'_register_{handler_type}')(
             name=name,
             user_handler=user_handler,
             handler_string=handler_string,
             wrapped_handler=wrapped_handler,
             kwargs=kwargs,
         )
+
         self.handler_map[name] = wrapped_handler
 
     def _attach_websocket_handler(self, handler):
@@ -1120,10 +1107,9 @@ class Chalice(_HandlerRegistration, DecoratorAPI):
     def _initialize(self, env):
         if self.configure_logs:
             self._configure_logging()
-        env['AWS_EXECUTION_ENV'] = '%s aws-chalice/%s' % (
-            env.get('AWS_EXECUTION_ENV', 'AWS_Lambda'),
-            __version__,
-        )
+        env[
+            'AWS_EXECUTION_ENV'
+        ] = f"{env.get('AWS_EXECUTION_ENV', 'AWS_Lambda')} aws-chalice/{__version__}"
 
     @property
     def debug(self):
@@ -1147,19 +1133,18 @@ class Chalice(_HandlerRegistration, DecoratorAPI):
         self.log.addHandler(handler)
 
     def _already_configured(self, log):
-        if not log.handlers:
-            return False
-        for handler in log.handlers:
-            if isinstance(handler, logging.StreamHandler):
-                if handler.stream == sys.stdout:
-                    return True
-        return False
+        return (
+            any(
+                isinstance(handler, logging.StreamHandler)
+                and handler.stream == sys.stdout
+                for handler in log.handlers
+            )
+            if log.handlers
+            else False
+        )
 
     def _configure_log_level(self):
-        if self._debug:
-            level = logging.DEBUG
-        else:
-            level = logging.ERROR
+        level = logging.DEBUG if self._debug else logging.ERROR
         self.log.setLevel(level)
 
     def register_blueprint(self, blueprint, name_prefix=None, url_prefix=None):
@@ -1333,9 +1318,10 @@ class AuthResponse(object):
                 # generate a policy that allows all HTTP methods.
                 methods = ['*']
                 path = route
-            for method in methods:
-                allowed_resources.append(
-                    self._generate_arn(path, request, method))
+            allowed_resources.extend(
+                self._generate_arn(path, request, method) for method in methods
+            )
+
         return allowed_resources
 
     def _generate_arn(self, route, request, method='*'):
@@ -1362,8 +1348,7 @@ class AuthResponse(object):
             # all routes.
             last_arn_segment += route
         arn_parts[-1] = last_arn_segment
-        final_arn = ':'.join(arn_parts)
-        return final_arn
+        return ':'.join(arn_parts)
 
 
 class AuthRoute(object):
@@ -1421,7 +1406,7 @@ class Rate(ScheduleExpression):
             # Remove the 's' from the end if it's singular.
             # This is required by the cloudwatch events API.
             unit = unit[:-1]
-        return 'rate(%s %s)' % (self.value, unit)
+        return f'rate({self.value} {unit})'
 
 
 class Cron(ScheduleExpression):
@@ -1434,14 +1419,7 @@ class Cron(ScheduleExpression):
         self.year = year
 
     def to_string(self):
-        return 'cron(%s %s %s %s %s %s)' % (
-            self.minutes,
-            self.hours,
-            self.day_of_month,
-            self.month,
-            self.day_of_week,
-            self.year,
-        )
+        return f'cron({self.minutes} {self.hours} {self.day_of_month} {self.month} {self.day_of_week} {self.year})'
 
 
 class S3EventConfig(BaseEventSourceConfig):
@@ -1640,9 +1618,11 @@ class RestAPIEventHandler(BaseLambdaHandler):
             allowed_methods = ', '.join(self.routes[resource_path].keys())
             return error_response(
                 error_code='MethodNotAllowedError',
-                message='Unsupported method: %s' % http_method,
+                message=f'Unsupported method: {http_method}',
                 http_status_code=405,
-                headers={'Allow': allowed_methods})
+                headers={'Allow': allowed_methods},
+            )
+
         route_entry = self.routes[resource_path][http_method]
         view_function = route_entry.view_function
         function_args = {name: event['pathParameters'][name]
@@ -1663,10 +1643,11 @@ class RestAPIEventHandler(BaseLambdaHandler):
                                          route_entry.content_types):
                 return error_response(
                     error_code='UnsupportedMediaType',
-                    message='Unsupported media type: %s' % content_type,
+                    message=f'Unsupported media type: {content_type}',
                     http_status_code=415,
-                    headers=cors_headers
+                    headers=cors_headers,
                 )
+
         response = self._get_view_function_response(view_function,
                                                     function_args)
         if cors_headers is not None:
@@ -1701,9 +1682,7 @@ class RestAPIEventHandler(BaseLambdaHandler):
         if request_accept_header is not None:
             expects_binary_response = _matches_content_type(
                 request_accept_header, self.api.binary_types)
-        if response_is_binary and not expects_binary_response:
-            return False
-        return True
+        return bool(not response_is_binary or expects_binary_response)
 
     def _get_view_function_response(self, view_function, function_args):
         try:
@@ -1739,8 +1718,7 @@ class RestAPIEventHandler(BaseLambdaHandler):
         else:
             body = {'Code': 'InternalServerError',
                     'Message': 'An internal server error occurred.'}
-        response = Response(body=body, headers=headers, status_code=500)
-        return response
+        return Response(body=body, headers=headers, status_code=500)
 
     def _validate_response(self, response):
         for header, value in response.headers.items():
@@ -1915,13 +1893,11 @@ class DynamoDBRecord(BaseLambdaEvent):
         # into:
         # "MyTable"
         parts = self.event_source_arn.split(':', 5)
-        if not len(parts) == 6:
+        if len(parts) != 6:
             return ''
         full_name = parts[-1]
         name_parts = full_name.split('/')
-        if len(name_parts) >= 2:
-            return name_parts[1]
-        return ''
+        return name_parts[1] if len(name_parts) >= 2 else ''
 
 
 class Blueprint(DecoratorAPI):

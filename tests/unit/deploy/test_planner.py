@@ -22,7 +22,7 @@ def create_function_resource(name, function_name=None,
                              memory_size=128, deployment_package=None,
                              role=None, layers=None, managed_layer=None):
     if function_name is None:
-        function_name = 'appname-dev-%s' % name
+        function_name = f'appname-dev-{name}'
     if environment_variables is None:
         environment_variables = {}
     if tags is None:
@@ -52,14 +52,12 @@ def create_function_resource(name, function_name=None,
 
 
 def create_managed_layer():
-    layer = models.LambdaLayer(
+    return models.LambdaLayer(
         resource_name='layer',
         layer_name='bar',
         runtime='python2.7',
-        deployment_package=models.DeploymentPackage(
-            filename='foo')
+        deployment_package=models.DeploymentPackage(filename='foo'),
     )
-    return layer
 
 
 def create_api_mapping():
@@ -170,11 +168,11 @@ class BasePlannerTests(object):
         return self.last_plan.instructions
 
     def filter_api_calls(self, plan):
-        api_calls = []
-        for instruction in plan:
-            if isinstance(instruction, models.APICall):
-                api_calls.append(instruction)
-        return api_calls
+        return [
+            instruction
+            for instruction in plan
+            if isinstance(instruction, models.APICall)
+        ]
 
     def assert_recorded_values(self, plan, resource_type, resource_name,
                                expected_mapping):
@@ -813,21 +811,25 @@ class TestPlanS3Events(BasePlannerTests):
         )
         full_plan = self.determine_plan(bucket_event)
         setup_plan, plan = full_plan[:4], full_plan[4:]
-        assert setup_plan[0:4] == [
+        assert setup_plan[:4] == [
             models.BuiltinFunction(
-                'parse_arn', [Variable("function_name_lambda_arn")],
+                'parse_arn',
+                [Variable("function_name_lambda_arn")],
                 output_var='parsed_lambda_arn',
             ),
-            models.JPSearch('account_id',
-                            input_var='parsed_lambda_arn',
-                            output_var='account_id'),
-            models.JPSearch('region',
-                            input_var='parsed_lambda_arn',
-                            output_var='region_name'),
-            models.JPSearch('partition',
-                            input_var='parsed_lambda_arn',
-                            output_var='partition')
+            models.JPSearch(
+                'account_id',
+                input_var='parsed_lambda_arn',
+                output_var='account_id',
+            ),
+            models.JPSearch(
+                'region', input_var='parsed_lambda_arn', output_var='region_name'
+            ),
+            models.JPSearch(
+                'partition', input_var='parsed_lambda_arn', output_var='partition'
+            ),
         ]
+
         self.assert_apicall_equals(
             plan[0],
             models.APICall(
@@ -990,23 +992,28 @@ class TestPlanWebsocketAPI(BasePlannerTests):
     def assert_loads_needed_variables(self, plan):
         # Parse arn and store region/account id for future
         # API calls.
-        assert plan[0:5] == [
+        assert plan[:5] == [
             models.BuiltinFunction(
-                'parse_arn', [Variable('function_name_connect_lambda_arn')],
+                'parse_arn',
+                [Variable('function_name_connect_lambda_arn')],
                 output_var='parsed_lambda_arn',
             ),
-            models.JPSearch('account_id',
-                            input_var='parsed_lambda_arn',
-                            output_var='account_id'),
-            models.JPSearch('region',
-                            input_var='parsed_lambda_arn',
-                            output_var='region_name'),
-            models.JPSearch('partition',
-                            input_var='parsed_lambda_arn',
-                            output_var='partition'),
-            models.JPSearch('dns_suffix',
-                            input_var='parsed_lambda_arn',
-                            output_var='dns_suffix'),
+            models.JPSearch(
+                'account_id',
+                input_var='parsed_lambda_arn',
+                output_var='account_id',
+            ),
+            models.JPSearch(
+                'region', input_var='parsed_lambda_arn', output_var='region_name'
+            ),
+            models.JPSearch(
+                'partition', input_var='parsed_lambda_arn', output_var='partition'
+            ),
+            models.JPSearch(
+                'dns_suffix',
+                input_var='parsed_lambda_arn',
+                output_var='dns_suffix',
+            ),
         ]
 
     def test_can_plan_websocket_api(self):
@@ -1361,27 +1368,33 @@ class TestPlanRestAPI(BasePlannerTests):
     def assert_loads_needed_variables(self, plan):
         # Parse arn and store region/account id for future
         # API calls.
-        assert plan[0:6] == [
+        assert plan[:6] == [
             models.BuiltinFunction(
-                'parse_arn', [Variable('function_name_lambda_arn')],
+                'parse_arn',
+                [Variable('function_name_lambda_arn')],
                 output_var='parsed_lambda_arn',
             ),
-            models.JPSearch('account_id',
-                            input_var='parsed_lambda_arn',
-                            output_var='account_id'),
-            models.JPSearch('region',
-                            input_var='parsed_lambda_arn',
-                            output_var='region_name'),
-            models.JPSearch('partition',
-                            input_var='parsed_lambda_arn',
-                            output_var='partition'),
-            models.JPSearch('dns_suffix',
-                            input_var='parsed_lambda_arn',
-                            output_var='dns_suffix'),
+            models.JPSearch(
+                'account_id',
+                input_var='parsed_lambda_arn',
+                output_var='account_id',
+            ),
+            models.JPSearch(
+                'region', input_var='parsed_lambda_arn', output_var='region_name'
+            ),
+            models.JPSearch(
+                'partition', input_var='parsed_lambda_arn', output_var='partition'
+            ),
+            models.JPSearch(
+                'dns_suffix',
+                input_var='parsed_lambda_arn',
+                output_var='dns_suffix',
+            ),
             # Verify we copy the function arn as needed.
             models.CopyVariable(
                 from_var='function_name_lambda_arn',
-                to_var='api_handler_lambda_arn'),
+                to_var='api_handler_lambda_arn',
+            ),
         ]
 
     def test_can_plan_rest_api(self):
@@ -2108,7 +2121,7 @@ class TestRemoteState(object):
         )
 
     def create_rest_api_model(self):
-        rest_api = models.RestAPI(
+        return models.RestAPI(
             resource_name='rest_api',
             swagger_doc={'swagger': '2.0'},
             minimum_compression='',
@@ -2117,29 +2130,26 @@ class TestRemoteState(object):
             xray=False,
             lambda_function=None,
         )
-        return rest_api
 
     def create_api_mapping(self):
-        api_mapping = models.APIMapping(
+        return models.APIMapping(
             resource_name='api_mapping',
             mount_path='(none)',
-            api_gateway_stage='dev'
+            api_gateway_stage='dev',
         )
-        return api_mapping
 
     def create_domain_name(self):
-        domain_name = models.DomainName(
+        return models.DomainName(
             protocol=models.APIType.HTTP,
             resource_name='api_gateway_custom_domain',
             domain_name='example.com',
             tls_version=models.TLSVersion.TLS_1_0,
             certificate_arn='certificate_arn',
-            api_mapping=self.create_api_mapping()
+            api_mapping=self.create_api_mapping(),
         )
-        return domain_name
 
     def create_websocket_api_model(self):
-        websocket_api = models.WebsocketAPI(
+        return models.WebsocketAPI(
             resource_name='websocket_api',
             name='app-stage-websocket-api',
             api_gateway_stage='api',
@@ -2148,7 +2158,6 @@ class TestRemoteState(object):
             message_function=None,
             disconnect_function=None,
         )
-        return websocket_api
 
     def test_role_exists(self):
         self.client.get_role_arn_for_name.return_value = 'role:arn'
@@ -2477,7 +2486,7 @@ class TestRemoteState(object):
         else:
             deployed_resources = {'resources': []}
         self.client.verify_event_source_current.return_value = \
-            new_queue == deployed_queue
+                new_queue == deployed_queue
         remote_state = RemoteState(
             self.client, DeployedResources(deployed_resources),
         )
@@ -3153,7 +3162,7 @@ class TestKeyVariable(object):
     def test_key_variables_equal(self):
         key_var = KeyDataVariable('name', 'key')
         key_var_1 = KeyDataVariable('name', 'key_1')
-        assert not key_var == key_var_1
+        assert key_var != key_var_1
 
         key_var_2 = KeyDataVariable('name', 'key')
         assert key_var == key_var_2

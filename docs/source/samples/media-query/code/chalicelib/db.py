@@ -70,6 +70,4 @@ class DynamoMediaDB(MediaDB):
         )
 
     def _add_to_filter_expression(self, expression, condition):
-        if expression is None:
-            return condition
-        return expression & condition
+        return condition if expression is None else expression & condition

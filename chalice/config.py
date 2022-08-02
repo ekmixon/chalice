@@ -228,7 +228,7 @@ class Config(object):
         for cfg_dict in search_dicts:
             value = cfg_dict.get(name, {})
             if isinstance(value, dict):
-                final.update(value)
+                final |= value
         return final
 
     @property
@@ -296,9 +296,7 @@ class Config(object):
         v = self._chain_lookup('automatic_layer',
                                varies_per_chalice_stage=True,
                                varies_per_function=False)
-        if v is None:
-            return False
-        return v
+        return False if v is None else v
 
     @property
     def iam_role_arn(self):
@@ -313,14 +311,7 @@ class Config(object):
         result = self._chain_lookup('manage_iam_role',
                                     varies_per_chalice_stage=True,
                                     varies_per_function=True)
-        if result is None:
-            # To simplify downstream code, if manage_iam_role
-            # is None (indicating the user hasn't configured/specified this
-            # value anywhere), then we'll return a default value of True.
-            # Otherwise client code has to do an awkward
-            # "if manage_iam_role is None and not manage_iam_role".
-            return True
-        return result
+        return True if result is None else result
 
     @property
     def autogen_policy(self):
@@ -345,8 +336,10 @@ class Config(object):
     def tags(self):
         # type: () -> Dict[str, str]
         tags = self._chain_merge('tags')
-        tags['aws-chalice'] = 'version=%s:stage=%s:app=%s' % (
-            current_chalice_version, self.chalice_stage, self.app_name)
+        tags[
+            'aws-chalice'
+        ] = f'version={current_chalice_version}:stage={self.chalice_stage}:app={self.app_name}'
+
         return tags
 
     @property
@@ -371,20 +364,13 @@ class Config(object):
                                   varies_per_function=True)
 
     def scope(self, chalice_stage, function_name):
-        # type: (str, str) -> Config
-        # Used to create a new config object that's scoped to a different
-        # stage and/or function.  This creates a completely separate copy.
-        # This is preferred over mutating the existing config obj.
-        # We technically don't need to do a copy here, but this avoids
-        # any possible issues if we ever mutate the config values.
-        clone = self.__class__(
+        return self.__class__(
             chalice_stage=chalice_stage,
             function_name=function_name,
             user_provided_params=self._user_provided_params,
             config_from_disk=self._config_from_disk,
             default_params=self._default_params,
         )
-        return clone
 
     def deployed_resources(self, chalice_stage_name):
         # type: (str) -> DeployedResources
@@ -397,14 +383,17 @@ class Config(object):
         # This is arguably the wrong level of abstraction.
         # We might be able to move this elsewhere.
         deployed_file = os.path.join(
-            self.project_dir, '.chalice', 'deployed',
-            '%s.json' % chalice_stage_name)
+            self.project_dir, '.chalice', 'deployed', f'{chalice_stage_name}.json'
+        )
+
         data = self._load_json_file(deployed_file)
         if data is not None:
             schema_version = data.get('schema_version', '1.0')
             if schema_version != '2.0':
-                raise ValueError("Unsupported schema version (%s) in file: %s"
-                                 % (schema_version, deployed_file))
+                raise ValueError(
+                    f"Unsupported schema version ({schema_version}) in file: {deployed_file}"
+                )
+
             return DeployedResources(data)
         return self._try_old_deployer_values(chalice_stage_name)
 
@@ -429,7 +418,7 @@ class Config(object):
     def _upgrade_deployed_values(self, chalice_stage_name, data):
         # type: (str, Any) -> DeployedResources
         deployed = data[chalice_stage_name]
-        prefix = '%s-%s-' % (self.app_name, chalice_stage_name)
+        prefix = f'{self.app_name}-{chalice_stage_name}-'
         resources = []  # type: List[Dict[str, Any]]
         self._upgrade_lambda_functions(resources, deployed, prefix)
         self._upgrade_rest_api(resources, deployed)
@@ -498,7 +487,7 @@ class DeployedResources(object):
         try:
             return self._deployed_values_by_name[name]
         except KeyError:
-            raise ValueError("Resource does not exist: %s" % name)
+            raise ValueError(f"Resource does not exist: {name}")
 
     def resource_names(self):
         # type: () -> List[str]

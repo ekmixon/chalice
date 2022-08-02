@@ -259,7 +259,7 @@ def test_can_create_lambda_invoke_handler(clifactory):
     stage = 'dev'
     deployed_dir = os.path.join(clifactory.project_dir, '.chalice', 'deployed')
     os.mkdir(deployed_dir)
-    deployed_file = os.path.join(deployed_dir, '%s.json' % stage)
+    deployed_file = os.path.join(deployed_dir, f'{stage}.json')
     with open(deployed_file, 'w') as f:
         f.write(json.dumps({
             'resources': [
@@ -286,7 +286,7 @@ def test_does_raise_not_found_error_when_resource_is_not_lambda(clifactory):
     stage = 'dev'
     deployed_dir = os.path.join(clifactory.project_dir, '.chalice', 'deployed')
     os.mkdir(deployed_dir)
-    deployed_file = os.path.join(deployed_dir, '%s.json' % stage)
+    deployed_file = os.path.join(deployed_dir, f'{stage}.json')
     with open(deployed_file, 'w') as f:
         f.write(json.dumps({
             'resources': [

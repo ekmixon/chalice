@@ -92,5 +92,4 @@ class StatFileWatcher(FileWatcher):
         # type: (str) -> Iterator[str]
         for rootdir, _, filenames in self._osutils.walk(root_dir):
             for filename in filenames:
-                path = self._osutils.joinpath(rootdir, filename)
-                yield path
+                yield self._osutils.joinpath(rootdir, filename)

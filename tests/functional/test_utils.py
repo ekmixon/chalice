@@ -60,8 +60,7 @@ def test_can_merge_recorded_values(tmpdir):
     second = {'prod': {'deployed': 'values'}}
     utils.record_deployed_values(first, filename)
     utils.record_deployed_values(second, filename)
-    combined = first.copy()
-    combined.update(second)
+    combined = first | second
     with open(filename, 'r') as f:
         data = json.load(f)
     assert data == combined
@@ -69,13 +68,13 @@ def test_can_merge_recorded_values(tmpdir):
 
 def test_can_remove_stage_from_deployed_values(tmpdir):
     filename = str(tmpdir.join('deployed.json'))
-    deployed = {
-        'dev': {'deployed': 'values'},
-    }
     left_after_removal = {
         'prod': {'deployed': 'values'}
     }
-    deployed.update(left_after_removal)
+    deployed = {
+        'dev': {'deployed': 'values'},
+    } | left_after_removal
+
     with open(filename, 'wb') as f:
         f.write(json.dumps(deployed).encode('utf-8'))
     utils.remove_stage_from_deployed_values('dev', filename)

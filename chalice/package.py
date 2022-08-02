@@ -132,7 +132,7 @@ class TemplateGenerator(object):
 
     def dispatch(self, resource, template):
         # type: (models.Model, Dict[str, Any]) -> None
-        name = '_generate_%s' % resource.__class__.__name__.lower()
+        name = f'_generate_{resource.__class__.__name__.lower()}'
         handler = getattr(self, name, self._default)
         handler(resource, template)
 
@@ -314,7 +314,7 @@ class SAMTemplateGenerator(TemplateGenerator):
         if resource.minimum_compression:
             properties = resources['RestAPI']['Properties']
             properties['MinimumCompressionSize'] = \
-                int(resource.minimum_compression)
+                    int(resource.minimum_compression)
 
         handler_cfn_name = to_cfn_resource_name(
             resource.lambda_function.resource_name)
@@ -337,7 +337,7 @@ class SAMTemplateGenerator(TemplateGenerator):
         }
         for auth in resource.authorizers:
             auth_cfn_name = to_cfn_resource_name(auth.resource_name)
-            resources[auth_cfn_name + 'InvokePermission'] = {
+            resources[f'{auth_cfn_name}InvokePermission'] = {
                 'Type': 'AWS::Lambda::Permission',
                 'Properties': {
                     'FunctionName': {'Fn::GetAtt': [auth_cfn_name, 'Arn']},
@@ -345,14 +345,17 @@ class SAMTemplateGenerator(TemplateGenerator):
                     'Principal': self._options.service_principal('apigateway'),
                     'SourceArn': {
                         'Fn::Sub': [
-                            ('arn:${AWS::Partition}:execute-api'
-                             ':${AWS::Region}:${AWS::AccountId}'
-                             ':${RestAPIId}/*'),
+                            (
+                                'arn:${AWS::Partition}:execute-api'
+                                ':${AWS::Region}:${AWS::AccountId}'
+                                ':${RestAPIId}/*'
+                            ),
                             {'RestAPIId': {'Ref': 'RestAPI'}},
                         ]
                     },
-                }
+                },
             }
+
         self._add_domain_name(resource, template)
         self._inject_restapi_outputs(template)
 
@@ -393,7 +396,7 @@ class SAMTemplateGenerator(TemplateGenerator):
     def _add_websocket_lambda_integration(
             self, api_ref, websocket_handler, resources):
         # type: (Dict[str, Any], str, Dict[str, Any]) -> None
-        resources['%sAPIIntegration' % websocket_handler] = {
+        resources[f'{websocket_handler}APIIntegration'] = {
             'Type': 'AWS::ApiGatewayV2::Integration',
             'Properties': {
                 'ApiId': api_ref,
@@ -409,16 +412,16 @@ class SAMTemplateGenerator(TemplateGenerator):
                             ':${AWS::AccountId}:function'
                             ':${WebsocketHandler}/invocations'
                         ),
-                        {'WebsocketHandler': {'Ref': websocket_handler}}
+                        {'WebsocketHandler': {'Ref': websocket_handler}},
                     ],
-                }
-            }
+                },
+            },
         }
 
     def _add_websocket_lambda_invoke_permission(
             self, api_ref, websocket_handler, resources):
         # type: (Dict[str, str], str, Dict[str, Any]) -> None
-        resources['%sInvokePermission' % websocket_handler] = {
+        resources[f'{websocket_handler}InvokePermission'] = {
             'Type': 'AWS::Lambda::Permission',
             'Properties': {
                 'FunctionName': {'Ref': websocket_handler},
@@ -426,13 +429,15 @@ class SAMTemplateGenerator(TemplateGenerator):
                 'Principal': self._options.service_principal('apigateway'),
                 'SourceArn': {
                     'Fn::Sub': [
-                        ('arn:${AWS::Partition}:execute-api'
-                         ':${AWS::Region}:${AWS::AccountId}'
-                         ':${WebsocketAPIId}/*'),
+                        (
+                            'arn:${AWS::Partition}:execute-api'
+                            ':${AWS::Region}:${AWS::AccountId}'
+                            ':${WebsocketAPIId}/*'
+                        ),
                         {'WebsocketAPIId': api_ref},
                     ],
                 },
-            }
+            },
         }
 
     def _add_websocket_lambda_integrations(self, api_ref, resources):
@@ -575,16 +580,18 @@ class SAMTemplateGenerator(TemplateGenerator):
         role_cfn_name = self._register_cfn_resource_name(
             resource.resource_name)
         resource.trust_policy['Statement'][0]['Principal']['Service'] = \
-            self._options.service_principal('lambda')
+                self._options.service_principal('lambda')
         template['Resources'][role_cfn_name] = {
             'Type': 'AWS::IAM::Role',
             'Properties': {
                 'AssumeRolePolicyDocument': resource.trust_policy,
                 'Policies': [
-                    {'PolicyDocument': resource.policy.document,
-                     'PolicyName': role_cfn_name + 'Policy'},
+                    {
+                        'PolicyDocument': resource.policy.document,
+                        'PolicyName': f'{role_cfn_name}Policy',
+                    }
                 ],
-            }
+            },
         }
 
     def _generate_s3bucketnotification(self, resource, template):
@@ -729,14 +736,14 @@ class SAMTemplateGenerator(TemplateGenerator):
             'Type': 'AWS::ApiGateway::DomainName',
             'Properties': properties
         }
-        template['Resources'][cfn_name + 'Mapping'] = {
+        template['Resources'][f'{cfn_name}Mapping'] = {
             'Type': 'AWS::ApiGateway::BasePathMapping',
             'Properties': {
                 'DomainName': {'Ref': 'ApiGatewayCustomDomain'},
                 'RestApiId': {'Ref': 'RestAPI'},
                 'BasePath': domain_name.api_mapping.mount_path,
                 'Stage': resource.api_gateway_stage,
-            }
+            },
         }
 
     def _add_websocket_domain_name(self, resource, template):
@@ -758,14 +765,14 @@ class SAMTemplateGenerator(TemplateGenerator):
             'Type': 'AWS::ApiGatewayV2::DomainName',
             'Properties': properties,
         }
-        template['Resources'][cfn_name + 'Mapping'] = {
+        template['Resources'][f'{cfn_name}Mapping'] = {
             'Type': 'AWS::ApiGatewayV2::ApiMapping',
             'Properties': {
                 'DomainName': {'Ref': cfn_name},
                 'ApiId': {'Ref': 'WebsocketAPI'},
                 'ApiMappingKey': domain_name.api_mapping.mount_path,
                 'Stage': {'Ref': 'WebsocketAPIStage'},
-            }
+            },
         }
 
     def _register_cfn_resource_name(self, name):
@@ -825,19 +832,22 @@ class TerraformGenerator(TemplateGenerator):
             lambda_function.resource_name, attr)
 
     def _arnref(self, arn_template, **kw):
-        # type: (str, str) -> str
-        d = dict(
-            partition='${data.aws_partition.chalice.partition}',
-            region='${data.aws_region.chalice.name}',
-            account_id='${data.aws_caller_identity.chalice.account_id}')
-        d.update(kw)
+        d = (
+            dict(
+                partition='${data.aws_partition.chalice.partition}',
+                region='${data.aws_region.chalice.name}',
+                account_id='${data.aws_caller_identity.chalice.account_id}',
+            )
+            | kw
+        )
+
         return arn_template % d
 
     def _generate_managediamrole(self, resource, template):
         # type: (models.ManagedIAMRole, Dict[str, Any]) -> None
 
         resource.trust_policy['Statement'][0]['Principal']['Service'] = \
-            self._options.service_principal('lambda')
+                self._options.service_principal('lambda')
 
         template['resource'].setdefault('aws_iam_role', {})[
             resource.resource_name] = {
@@ -846,8 +856,9 @@ class TerraformGenerator(TemplateGenerator):
         }
 
         template['resource'].setdefault('aws_iam_role_policy', {})[
-            resource.resource_name] = {
-            'name': resource.resource_name + 'Policy',
+            resource.resource_name
+        ] = {
+            'name': f'{resource.resource_name}Policy',
             'policy': json.dumps(resource.policy.document),
             'role': '${aws_iam_role.%s.id}' % resource.resource_name,
         }
@@ -886,10 +897,15 @@ class TerraformGenerator(TemplateGenerator):
         else:
             bucket_name = resource.bucket
         template['resource'].setdefault(
-            'aws_s3_bucket_notification', {}).setdefault(
-            bucket_name + '_notify',
-            {'bucket': resource.bucket}).setdefault(
-            'lambda_function', []).append(bnotify)
+            'aws_s3_bucket_notification', {}
+        ).setdefault(
+            f'{bucket_name}_notify', {'bucket': resource.bucket}
+        ).setdefault(
+            'lambda_function', []
+        ).append(
+            bnotify
+        )
+
 
         template['resource'].setdefault('aws_lambda_permission', {})[
             resource.resource_name] = {
@@ -1119,14 +1135,15 @@ class TerraformGenerator(TemplateGenerator):
         }
 
         template['resource'].setdefault('aws_lambda_permission', {})[
-            resource.resource_name + '_invoke'] = {
+            f'{resource.resource_name}_invoke'
+        ] = {
             'function_name': self._fref(resource.lambda_function),
             'action': 'lambda:InvokeFunction',
             'principal': self._options.service_principal('apigateway'),
-            'source_arn':
-                "${aws_api_gateway_rest_api.%s.execution_arn}/*" % (
-                    resource.resource_name)
+            'source_arn': "${aws_api_gateway_rest_api.%s.execution_arn}/*"
+            % (resource.resource_name),
         }
+
 
         template.setdefault('output', {})[
             'EndpointURL'] = {
@@ -1141,15 +1158,18 @@ class TerraformGenerator(TemplateGenerator):
 
         for auth in resource.authorizers:
             template['resource']['aws_lambda_permission'][
-                auth.resource_name + '_invoke'] = {
+                f'{auth.resource_name}_invoke'
+            ] = {
                 'function_name': self._fref(auth),
                 'action': 'lambda:InvokeFunction',
                 'principal': self._options.service_principal('apigateway'),
                 'source_arn': (
-                    "${aws_api_gateway_rest_api.%s.execution_arn}" % (
-                        resource.resource_name) + "/*"
-                )
+                    "${aws_api_gateway_rest_api.%s.execution_arn}"
+                    % (resource.resource_name)
+                    + "/*"
+                ),
             }
+
         self._add_domain_name(resource, template)
 
     def _add_domain_name(self, resource, template):
@@ -1175,22 +1195,21 @@ class TerraformGenerator(TemplateGenerator):
             domain_name.resource_name: properties
         }
         template['resource']['aws_api_gateway_base_path_mapping'] = {
-            domain_name.resource_name + '_mapping': {
+            f'{domain_name.resource_name}_mapping': {
                 'stage_name': resource.api_gateway_stage,
                 'domain_name': domain_name.domain_name,
-                'api_id': '${aws_api_gateway_rest_api.%s.id}' % (
-                    resource.resource_name)
+                'api_id': '${aws_api_gateway_rest_api.%s.id}'
+                % (resource.resource_name),
             }
         }
+
         self._add_domain_name_outputs(domain_name.resource_name, endpoint_type,
                                       template)
 
     def _add_domain_name_outputs(self, domain_resource_name,
                                  endpoint_type, template):
         # type: (str, str, Dict[str, Any]) -> None
-        base = (
-            'aws_api_gateway_domain_name.%s' % domain_resource_name
-        )
+        base = f'aws_api_gateway_domain_name.{domain_resource_name}'
         if endpoint_type == 'EDGE':
             alias_domain_name = '${%s.cloudfront_domain_name}' % base
             hosted_zone_id = '${%s.cloudfront_zone_id}' % base
@@ -1312,7 +1331,7 @@ class TerraformCodeLocationPostProcessor(TemplatePostProcessor):
                 copied = True
             r['filename'] = "${path.module}/deployment.zip"
             r['source_code_hash'] = \
-                '${filebase64sha256("${path.module}/deployment.zip")}'
+                    '${filebase64sha256("${path.module}/deployment.zip")}'
         copied = False
         for r in resources.get('aws_lambda_layer_version', {}).values():
             if not copied:
@@ -1321,7 +1340,7 @@ class TerraformCodeLocationPostProcessor(TemplatePostProcessor):
                 copied = True
             r['filename'] = "${path.module}/layer-deployment.zip"
             r['source_code_hash'] = \
-                '${filebase64sha256("${path.module}/layer-deployment.zip")}'
+                    '${filebase64sha256("${path.module}/layer-deployment.zip")}'
 
 
 class TemplateMergePostProcessor(TemplatePostProcessor):
@@ -1351,11 +1370,9 @@ class TemplateMergePostProcessor(TemplatePostProcessor):
         template_name = cast(str, self._merge_template)
         filepath = os.path.abspath(template_name)
         if not self._osutils.file_exists(filepath):
-            raise RuntimeError('Cannot find template file: %s' % filepath)
+            raise RuntimeError(f'Cannot find template file: {filepath}')
         template_data = self._osutils.get_file_contents(filepath, binary=False)
-        loaded_template = self._template_serializer.load_template(
-            template_data, filepath)
-        return loaded_template
+        return self._template_serializer.load_template(template_data, filepath)
 
 
 class CompositePostProcessor(TemplatePostProcessor):
@@ -1383,7 +1400,7 @@ class TemplateDeepMerger(TemplateMerger):
     def _merge(self, file_template, chalice_template):
         # type: (Any, Any) -> Any
         if isinstance(file_template, dict) and \
-                isinstance(chalice_template, dict):
+                    isinstance(chalice_template, dict):
             return self._merge_dict(file_template, chalice_template)
         return file_template
 
@@ -1419,8 +1436,7 @@ class JSONTemplateSerializer(TemplateSerializer):
         try:
             return json.loads(file_contents)
         except ValueError:
-            raise RuntimeError(
-                'Expected %s to be valid JSON template.' % filename)
+            raise RuntimeError(f'Expected {filename} to be valid JSON template.')
 
 
 class YAMLTemplateSerializer(TemplateSerializer):
@@ -1446,14 +1462,13 @@ class YAMLTemplateSerializer(TemplateSerializer):
                 Loader=yaml.SafeLoader,
             )
         except ScannerError:
-            raise RuntimeError(
-                'Expected %s to be valid YAML template.' % filename)
+            raise RuntimeError(f'Expected {filename} to be valid YAML template.')
 
     def _custom_sam_instrinsics(self, loader, tag_prefix, node):
         # type: (yaml.SafeLoader, str, Node) -> Dict[str, Any]
         tag = node.tag[1:]
         if tag not in ['Ref', 'Condition']:
-            tag = 'Fn::%s' % tag
+            tag = f'Fn::{tag}'
         value = self._get_value(loader, node)
         return {tag: value}
 

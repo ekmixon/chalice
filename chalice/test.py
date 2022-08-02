@@ -123,11 +123,7 @@ class TestHTTPClient(BaseClient):
 
     def _error_response(self, e):
         # type: (LocalGatewayException) -> HTTPResponse
-        return HTTPResponse(
-            headers=e.headers,
-            body=e.body if e.body else b'',
-            status_code=e.CODE
-        )
+        return HTTPResponse(headers=e.headers, body=e.body or b'', status_code=e.CODE)
 
     def get(self, path, **kwargs):
         # type: (str, **Any) -> HTTPResponse
@@ -197,95 +193,97 @@ class TestEventsClient(BaseClient):
         self._app = app
 
     def generate_sns_event(self, message, subject=''):
-        # type: (str, str) -> Dict[str, Any]
-        sns_event = {'Records': [{
-            'EventSource': 'aws:sns',
-            'EventSubscriptionArn': 'arn:subscription-arn',
-            'EventVersion': '1.0',
-            'Sns': {
-                'Message': message,
-                'MessageAttributes': {
-                    'AttributeKey': {
-                        'Type': 'String',
-                        'Value': 'AttributeValue'
-                    }
-                },
-                'MessageId': 'abcdefgh-51e4-5ae2-9964-b296c8d65d1a',
-                'Signature': 'signature',
-                'SignatureVersion': '1',
-                'SigningCertUrl': (
-                    'https://sns.us-west-2.amazonaws.com/cert.pem'),
-                'Subject': subject,
-                'Timestamp': '2018-06-26T19:41:38.695Z',
-                'TopicArn': 'arn:aws:sns:us-west-2:12345:TopicName',
-                'Type': 'Notification',
-                'UnsubscribeUrl': 'https://unsubscribe-url/'
-            }
-        }]}
-        return sns_event
-
-    def generate_s3_event(self, bucket, key, event_name='ObjectCreated:Put'):
-        # type: (str, str, str) -> Dict[str, Any]
-        s3_event = {
+        return {
             'Records': [
-                {'awsRegion': 'us-west-2',
-                 'eventName': event_name,
-                 'eventSource': 'aws:s3',
-                 'eventTime': '2018-05-22T04:41:23.823Z',
-                 'eventVersion': '2.0',
-                 'requestParameters': {'sourceIPAddress': '1.1.1.1'},
-                 'responseElements': {
-                     'x-amz-id-2': 'request-id-2',
-                     'x-amz-request-id': 'request-id-1'
-                 },
-                 's3': {
-                     'bucket': {
-                         'arn': 'arn:aws:s3:::%s' % bucket,
-                         'name': bucket,
-                         'ownerIdentity': {
-                             'principalId': 'ABCD'
-                         }
-                     },
-                     'configurationId': 'config-id',
-                     'object': {
-                         'eTag': 'd41d8cd98f00b204e9800998ecf8427e',
-                         'key': key,
-                         'sequencer': '005B039F73C627CE8B',
-                         'size': 0
-                     },
-                     's3SchemaVersion': '1.0'
-                 },
-                 'userIdentity': {'principalId': 'AWS:XYZ'}
-                 }
+                {
+                    'EventSource': 'aws:sns',
+                    'EventSubscriptionArn': 'arn:subscription-arn',
+                    'EventVersion': '1.0',
+                    'Sns': {
+                        'Message': message,
+                        'MessageAttributes': {
+                            'AttributeKey': {
+                                'Type': 'String',
+                                'Value': 'AttributeValue',
+                            }
+                        },
+                        'MessageId': 'abcdefgh-51e4-5ae2-9964-b296c8d65d1a',
+                        'Signature': 'signature',
+                        'SignatureVersion': '1',
+                        'SigningCertUrl': (
+                            'https://sns.us-west-2.amazonaws.com/cert.pem'
+                        ),
+                        'Subject': subject,
+                        'Timestamp': '2018-06-26T19:41:38.695Z',
+                        'TopicArn': 'arn:aws:sns:us-west-2:12345:TopicName',
+                        'Type': 'Notification',
+                        'UnsubscribeUrl': 'https://unsubscribe-url/',
+                    },
+                }
             ]
         }
-        return s3_event
+
+    def generate_s3_event(self, bucket, key, event_name='ObjectCreated:Put'):
+        return {
+            'Records': [
+                {
+                    'awsRegion': 'us-west-2',
+                    'eventName': event_name,
+                    'eventSource': 'aws:s3',
+                    'eventTime': '2018-05-22T04:41:23.823Z',
+                    'eventVersion': '2.0',
+                    'requestParameters': {'sourceIPAddress': '1.1.1.1'},
+                    'responseElements': {
+                        'x-amz-id-2': 'request-id-2',
+                        'x-amz-request-id': 'request-id-1',
+                    },
+                    's3': {
+                        'bucket': {
+                            'arn': f'arn:aws:s3:::{bucket}',
+                            'name': bucket,
+                            'ownerIdentity': {'principalId': 'ABCD'},
+                        },
+                        'configurationId': 'config-id',
+                        'object': {
+                            'eTag': 'd41d8cd98f00b204e9800998ecf8427e',
+                            'key': key,
+                            'sequencer': '005B039F73C627CE8B',
+                            'size': 0,
+                        },
+                        's3SchemaVersion': '1.0',
+                    },
+                    'userIdentity': {'principalId': 'AWS:XYZ'},
+                }
+            ]
+        }
 
     def generate_sqs_event(self, message_bodies, queue_name='queue-name'):
         # type: (List[str], str) -> Dict[str, Any]
-        records = [{
-            'attributes': {
-                'ApproximateFirstReceiveTimestamp': '1530576251596',
-                'ApproximateReceiveCount': '1',
-                'SenderId': 'sender-id',
-                'SentTimestamp': '1530576251595'
-            },
-            'awsRegion': 'us-west-2',
-            'body': body,
-            'eventSource': 'aws:sqs',
-            'eventSourceARN': 'arn:aws:sqs:us-west-2:12345:%s' % queue_name,
-            'md5OfBody': '754ac2f7a12df38320e0c5eafd060145',
-            'messageAttributes': {},
-            'messageId': 'message-id',
-            'receiptHandle': 'receipt-handle'
-        } for body in message_bodies]
-        sqs_event = {'Records': records}
-        return sqs_event
+        records = [
+            {
+                'attributes': {
+                    'ApproximateFirstReceiveTimestamp': '1530576251596',
+                    'ApproximateReceiveCount': '1',
+                    'SenderId': 'sender-id',
+                    'SentTimestamp': '1530576251595',
+                },
+                'awsRegion': 'us-west-2',
+                'body': body,
+                'eventSource': 'aws:sqs',
+                'eventSourceARN': f'arn:aws:sqs:us-west-2:12345:{queue_name}',
+                'md5OfBody': '754ac2f7a12df38320e0c5eafd060145',
+                'messageAttributes': {},
+                'messageId': 'message-id',
+                'receiptHandle': 'receipt-handle',
+            }
+            for body in message_bodies
+        ]
+
+        return {'Records': records}
 
     def generate_cw_event(self, source, detail_type,
                           detail, resources, region='us-west-2'):
-        # type: (str, str, Dict[str, Any], List[str], str) -> Dict[str, Any]
-        event = {
+        return {
             "version": 0,
             "id": "7bf73129-1428-4cd3-a780-95db273d1602",
             "detail-type": detail_type,
@@ -296,29 +294,30 @@ class TestEventsClient(BaseClient):
             "resources": resources,
             "detail": detail,
         }
-        return event
 
     def generate_kinesis_event(self, message_bodies,
                                stream_name='stream-name'):
         # type: (List[bytes], str) -> Dict[str, Any]
-        records = [{
-            "kinesis": {
-                "kinesisSchemaVersion": "1.0",
-                "partitionKey": "1",
-                "sequenceNumber": "12345",
-                "data": base64.b64encode(body).decode('ascii'),
-                "approximateArrivalTimestamp": 1545084650.987
-            },
-            "eventSource": "aws:kinesis",
-            "eventVersion": "1.0",
-            "eventID": "shardId-000000000006:12345",
-            "eventName": "aws:kinesis:record",
-            "invokeIdentityArn": "arn:aws:iam::123:role/lambda-role",
-            "awsRegion": "us-west-2",
-            "eventSourceARN": (
-                "arn:aws:kinesis:us-east-2:123:stream/%s" % stream_name
-            )
-        } for body in message_bodies]
+        records = [
+            {
+                "kinesis": {
+                    "kinesisSchemaVersion": "1.0",
+                    "partitionKey": "1",
+                    "sequenceNumber": "12345",
+                    "data": base64.b64encode(body).decode('ascii'),
+                    "approximateArrivalTimestamp": 1545084650.987,
+                },
+                "eventSource": "aws:kinesis",
+                "eventVersion": "1.0",
+                "eventID": "shardId-000000000006:12345",
+                "eventName": "aws:kinesis:record",
+                "invokeIdentityArn": "arn:aws:iam::123:role/lambda-role",
+                "awsRegion": "us-west-2",
+                "eventSourceARN": f"arn:aws:kinesis:us-east-2:123:stream/{stream_name}",
+            }
+            for body in message_bodies
+        ]
+
         return {'Records': records}
 
 

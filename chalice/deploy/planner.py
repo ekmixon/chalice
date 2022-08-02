@@ -53,8 +53,9 @@ class RemoteState(object):
                 "name": resource.resource_name,
                 "resource_type": "iam_role",
             }
-        raise ValueError("Deployed values for resource does not exist: %s"
-                         % resource.resource_name)
+        raise ValueError(
+            f"Deployed values for resource does not exist: {resource.resource_name}"
+        )
 
     def resource_exists(self, resource, *args):
         # type: (models.ManagedModel, Optional[Any]) -> bool
@@ -62,11 +63,15 @@ class RemoteState(object):
         if key in self._cache:
             return self._cache[key]
         try:
-            handler = getattr(self, '_resource_exists_%s'
-                              % resource.__class__.__name__.lower())
+            handler = getattr(
+                self, f'_resource_exists_{resource.__class__.__name__.lower()}'
+            )
+
         except AttributeError:
-            raise ValueError("RemoteState received an unsupported resource: %s"
-                             % resource.resource_type)
+            raise ValueError(
+                f"RemoteState received an unsupported resource: {resource.resource_type}"
+            )
+
         result = handler(resource, *args)
         self._cache[key] = result
         return result
@@ -111,7 +116,7 @@ class RemoteState(object):
             return False
         return self._client.verify_event_source_current(
             event_uuid=deployed_values['event_uuid'],
-            resource_name='stream/%s' % resource.stream,
+            resource_name=f'stream/{resource.stream}',
             service_name='kinesis',
             function_arn=deployed_values['lambda_arn'],
         )
@@ -200,11 +205,10 @@ class PlanStage(object):
         plan = []  # type: List[models.Instruction]
         messages = {}  # type: Dict[int, str]
         for resource in resources:
-            name = '_plan_%s' % resource.__class__.__name__.lower()
+            name = f'_plan_{resource.__class__.__name__.lower()}'
             handler = getattr(self, name, None)
             if handler is not None:
-                result = handler(resource)
-                if result:
+                if result := handler(resource):
                     self._add_result_to_plan(result, plan, messages)
         return models.Plan(plan, messages)
 
@@ -259,8 +263,8 @@ class PlanStage(object):
         ):
             path_to_print = '/'
             if resource.mount_path != '(none)' and \
-                    not resource.mount_path.startswith("/"):
-                path_to_print = '/%s' % resource.mount_path
+                        not resource.mount_path.startswith("/"):
+                path_to_print = f'/{resource.mount_path}'
             api_calls.extend([
                 (api_call, "Creating api mapping: %s\n" % path_to_print),
                 models.StoreMultipleValue(
@@ -301,93 +305,86 @@ class PlanStage(object):
         return api_calls
 
     def _add_domainname_plan(self, resource, endpoint_type):
-        # type: (models.DomainName, str) -> Sequence[InstructionMsg]
-        api_calls = []  # type: List[InstructionMsg]
-
         params = {
             'protocol': resource.protocol.value,
             'tags': resource.tags,
             'endpoint_type': endpoint_type,
             'domain_name': resource.domain_name,
+            'certificate_arn': resource.certificate_arn,
         }
-        params['certificate_arn'] = resource.certificate_arn
+
         if resource.tls_version is not None:
             params['security_policy'] = resource.tls_version.value
 
-        if not self._remote_state.resource_exists(resource):
-            domain_name_api_call = (
-                models.APICall(
-                    method_name='create_domain_name',
-                    params=params,
-                    output_var=resource.resource_name
-                ),
-                "Creating custom domain name: %s\n" % resource.domain_name
-            )
-
-        else:
-            domain_name_api_call = (
+        domain_name_api_call = (
+            (
                 models.APICall(
                     method_name='update_domain_name',
                     params=params,
-                    output_var=resource.resource_name
+                    output_var=resource.resource_name,
                 ),
-                "Updating custom domain name: %s\n" % resource.domain_name
+                "Updating custom domain name: %s\n" % resource.domain_name,
             )
+            if self._remote_state.resource_exists(resource)
+            else (
+                models.APICall(
+                    method_name='create_domain_name',
+                    params=params,
+                    output_var=resource.resource_name,
+                ),
+                "Creating custom domain name: %s\n" % resource.domain_name,
+            )
+        )
 
-        api_calls.extend([
+        return [
             domain_name_api_call,
             models.StoreValue(
                 name='hosted_zone_id',
-                value=KeyDataVariable(resource.resource_name,
-                                      'hosted_zone_id')
+                value=KeyDataVariable(resource.resource_name, 'hosted_zone_id'),
             ),
             models.RecordResourceVariable(
                 resource_type='domain_name',
                 resource_name=resource.resource_name,
                 name='hosted_zone_id',
-                variable_name='hosted_zone_id'
+                variable_name='hosted_zone_id',
             ),
             models.StoreValue(
                 name='alias_domain_name',
-                value=KeyDataVariable(resource.resource_name,
-                                      'alias_domain_name')
+                value=KeyDataVariable(resource.resource_name, 'alias_domain_name'),
             ),
             models.RecordResourceVariable(
                 resource_type='domain_name',
                 resource_name=resource.resource_name,
                 name='alias_domain_name',
-                variable_name='alias_domain_name'
+                variable_name='alias_domain_name',
             ),
             models.StoreValue(
                 name='certificate_arn',
-                value=KeyDataVariable(resource.resource_name,
-                                      'certificate_arn')
+                value=KeyDataVariable(resource.resource_name, 'certificate_arn'),
             ),
             models.RecordResourceVariable(
                 resource_type='domain_name',
                 resource_name=resource.resource_name,
                 name='certificate_arn',
-                variable_name='certificate_arn'
+                variable_name='certificate_arn',
             ),
             models.StoreValue(
                 name='security_policy',
-                value=KeyDataVariable(resource.resource_name,
-                                      'security_policy')
+                value=KeyDataVariable(resource.resource_name, 'security_policy'),
             ),
             models.RecordResourceVariable(
                 resource_type='domain_name',
                 resource_name=resource.resource_name,
                 name='security_policy',
-                variable_name='security_policy'
+                variable_name='security_policy',
             ),
             models.RecordResourceValue(
                 resource_type='domain_name',
                 resource_name=resource.resource_name,
                 name='domain_name',
-                value=resource.domain_name
-            )
-        ])
-        return api_calls
+                value=resource.domain_name,
+            ),
+        ]
 
     def _plan_lambdalayer(self, resource):
         # type: (models.LambdaLayer) -> Sequence[InstructionMsg]
@@ -436,7 +433,7 @@ class PlanStage(object):
         role_arn = self._get_role_arn(resource.role)
         # Make mypy happy, it complains if we don't "declare" this upfront.
         params = {}  # type: Dict[str, Any]
-        varname = '%s_lambda_arn' % resource.resource_name
+        varname = f'{resource.resource_name}_lambda_arn'
         # Not sure the best way to express this via mypy, but we know
         # that in the build stage we replace the deployment package
         # name with the actual filename generated from the pip
@@ -546,7 +543,7 @@ class PlanStage(object):
         # type: (models.ManagedIAMRole) -> Sequence[InstructionMsg]
         document = resource.policy.document
         role_exists = self._remote_state.resource_exists(resource)
-        varname = '%s_role_arn' % resource.role_name
+        varname = f'{resource.role_name}_role_arn'
         if not role_exists:
             return [
                 models.BuiltinFunction(
@@ -622,11 +619,9 @@ class PlanStage(object):
 
     def _plan_snslambdasubscription(self, resource):
         # type: (models.SNSLambdaSubscription) -> Sequence[InstructionMsg]
-        function_arn = Variable(
-            '%s_lambda_arn' % resource.lambda_function.resource_name
-        )
-        topic_arn_varname = '%s_topic_arn' % resource.resource_name
-        subscribe_varname = '%s_subscription_arn' % resource.resource_name
+        function_arn = Variable(f'{resource.lambda_function.resource_name}_lambda_arn')
+        topic_arn_varname = f'{resource.resource_name}_topic_arn'
+        subscribe_varname = f'{resource.resource_name}_subscription_arn'
 
         instruction_for_topic_arn = []  # type: List[InstructionMsg]
         if re.match(r"^arn:aws[a-z\-]*:sns:", resource.topic):
@@ -693,11 +688,9 @@ class PlanStage(object):
 
     def _plan_sqseventsource(self, resource):
         # type: (models.SQSEventSource) -> Sequence[InstructionMsg]
-        queue_arn_varname = '%s_queue_arn' % resource.resource_name
-        uuid_varname = '%s_uuid' % resource.resource_name
-        function_arn = Variable(
-            '%s_lambda_arn' % resource.lambda_function.resource_name
-        )
+        queue_arn_varname = f'{resource.resource_name}_queue_arn'
+        uuid_varname = f'{resource.resource_name}_uuid'
+        function_arn = Variable(f'{resource.lambda_function.resource_name}_lambda_arn')
         if not isinstance(resource.queue, models.QueueARN):
             instruction_for_queue_arn = self._arn_parse_instructions(
                 function_arn)
@@ -759,11 +752,9 @@ class PlanStage(object):
 
     def _plan_kinesiseventsource(self, resource):
         # type: (models.KinesisEventSource) -> Sequence[InstructionMsg]
-        stream_arn_varname = '%s_stream_arn' % resource.resource_name
-        uuid_varname = '%s_uuid' % resource.resource_name
-        function_arn = Variable(
-            '%s_lambda_arn' % resource.lambda_function.resource_name
-        )
+        stream_arn_varname = f'{resource.resource_name}_stream_arn'
+        uuid_varname = f'{resource.resource_name}_uuid'
+        function_arn = Variable(f'{resource.lambda_function.resource_name}_lambda_arn')
         instruction_for_stream_arn = self._arn_parse_instructions(function_arn)
         instruction_for_stream_arn.append(
             models.StoreValue(
@@ -814,27 +805,34 @@ class PlanStage(object):
 
     def _plan_dynamodbeventsource(self, resource):
         # type: (models.DynamoDBEventSource) -> Sequence[InstructionMsg]
-        uuid_varname = '%s_uuid' % resource.resource_name
-        function_arn = Variable(
-            '%s_lambda_arn' % resource.lambda_function.resource_name
-        )
+        uuid_varname = f'{resource.resource_name}_uuid'
+        function_arn = Variable(f'{resource.lambda_function.resource_name}_lambda_arn')
         instructions = []  # type: List[InstructionMsg]
         if self._remote_state.resource_exists(resource):
             deployed = self._remote_state.resource_deployed_values(resource)
             uuid = deployed['event_uuid']
-            return instructions + [
-                models.APICall(
-                    method_name='update_lambda_event_source',
-                    params={'event_uuid': uuid,
-                            'batch_size': resource.batch_size}
+            return (
+                instructions
+                + [
+                    models.APICall(
+                        method_name='update_lambda_event_source',
+                        params={
+                            'event_uuid': uuid,
+                            'batch_size': resource.batch_size,
+                        },
+                    )
+                ]
+                + self._batch_record_resource(
+                    'dynamodb_event',
+                    resource.resource_name,
+                    {
+                        'stream_arn': deployed['stream_arn'],
+                        'event_uuid': uuid,
+                        'lambda_arn': deployed['lambda_arn'],
+                    },
                 )
-            ] + self._batch_record_resource(
-                'dynamodb_event', resource.resource_name, {
-                    'stream_arn': deployed['stream_arn'],
-                    'event_uuid': deployed['event_uuid'],
-                    'lambda_arn': deployed['lambda_arn'],
-                }
             )
+
         return instructions + [
             (models.APICall(
                 method_name='create_lambda_event_source',
@@ -855,24 +853,26 @@ class PlanStage(object):
         )
 
     def _arn_parse_instructions(self, function_arn):
-        # type: (Variable) -> List[InstructionMsg]
-        instruction_for_stream_arn = [
-            models.BuiltinFunction('parse_arn', [function_arn],
-                                   output_var='parsed_lambda_arn'),
-            models.JPSearch('account_id', input_var='parsed_lambda_arn',
-                            output_var='account_id'),
-            models.JPSearch('region', input_var='parsed_lambda_arn',
-                            output_var='region_name'),
-            models.JPSearch('partition', input_var='parsed_lambda_arn',
-                            output_var='partition'),
-        ]  # type: List[InstructionMsg]
-        return instruction_for_stream_arn
+        return [
+            models.BuiltinFunction(
+                'parse_arn', [function_arn], output_var='parsed_lambda_arn'
+            ),
+            models.JPSearch(
+                'account_id',
+                input_var='parsed_lambda_arn',
+                output_var='account_id',
+            ),
+            models.JPSearch(
+                'region', input_var='parsed_lambda_arn', output_var='region_name'
+            ),
+            models.JPSearch(
+                'partition', input_var='parsed_lambda_arn', output_var='partition'
+            ),
+        ]
 
     def _plan_s3bucketnotification(self, resource):
         # type: (models.S3BucketNotification) -> Sequence[InstructionMsg]
-        function_arn = Variable(
-            '%s_lambda_arn' % resource.lambda_function.resource_name
-        )
+        function_arn = Variable(f'{resource.lambda_function.resource_name}_lambda_arn')
         return self._arn_parse_instructions(function_arn) + [
             models.APICall(
                 method_name='add_permission_for_s3_event',
@@ -907,9 +907,7 @@ class PlanStage(object):
     def _create_cloudwatchevent(self, resource):
         # type: (models.CloudWatchEventBase) -> Sequence[InstructionMsg]
 
-        function_arn = Variable(
-            '%s_lambda_arn' % resource.lambda_function.resource_name
-        )
+        function_arn = Variable(f'{resource.lambda_function.resource_name}_lambda_arn')
 
         params = {'rule_name': resource.rule_name}
         if isinstance(resource, models.ScheduledEvent):
@@ -921,7 +919,7 @@ class PlanStage(object):
             resource = cast(models.CloudWatchEvent, resource)
             params['event_pattern'] = resource.event_pattern
 
-        plan = [
+        return [
             models.APICall(
                 method_name='get_or_create_rule_arn',
                 params=params,
@@ -929,13 +927,17 @@ class PlanStage(object):
             ),
             models.APICall(
                 method_name='connect_rule_to_lambda',
-                params={'rule_name': resource.rule_name,
-                        'function_arn': function_arn}
+                params={
+                    'rule_name': resource.rule_name,
+                    'function_arn': function_arn,
+                },
             ),
             models.APICall(
                 method_name='add_permission_for_cloudwatch_event',
-                params={'rule_arn': Variable('rule-arn'),
-                        'function_arn': function_arn},
+                params={
+                    'rule_arn': Variable('rule-arn'),
+                    'function_arn': function_arn,
+                },
             ),
             # You need to remove targets (which have IDs)
             # before you can delete a rule.
@@ -944,9 +946,8 @@ class PlanStage(object):
                 resource_name=resource.resource_name,
                 name='rule_name',
                 value=resource.rule_name,
-            )
+            ),
         ]
-        return plan
 
     def _plan_cloudwatchevent(self, resource):
         # type: (models.CloudWatchEvent) -> Sequence[InstructionMsg]
@@ -972,7 +973,7 @@ class PlanStage(object):
 
     def _create_websocket_function_config(self, function):
         # type: (models.LambdaFunction) -> Dict[str, Any]
-        varname = '%s_lambda_arn' % function.resource_name
+        varname = f'{function.resource_name}_lambda_arn'
         return {
             'function': function,
             'name': function.function_name,
@@ -984,30 +985,32 @@ class PlanStage(object):
         # type: (Dict[str, Any]) -> Sequence[InstructionMsg]
         instructions = []  # type: List[InstructionMsg]
         for key, config in configs.items():
-            instructions.append(
-                models.StoreValue(
-                    name='websocket-%s-integration-lambda-path' % key,
-                    value=StringFormat(
-                        'arn:{partition}:apigateway:{region_name}:lambda:path/'
-                        '2015-03-31/functions/arn:{partition}'
-                        ':lambda:{region_name}:{account_id}:function'
-                        ':%s/invocations' % config['name'],
-                        ['partition', 'region_name', 'account_id'],
+            instructions.extend(
+                (
+                    models.StoreValue(
+                        name=f'websocket-{key}-integration-lambda-path',
+                        value=StringFormat(
+                            'arn:{partition}:apigateway:{region_name}:lambda:path/'
+                            '2015-03-31/functions/arn:{partition}'
+                            ':lambda:{region_name}:{account_id}:function'
+                            ':%s/invocations' % config['name'],
+                            ['partition', 'region_name', 'account_id'],
+                        ),
                     ),
-                ),
+                    models.APICall(
+                        method_name='create_websocket_integration',
+                        params={
+                            'api_id': Variable('websocket_api_id'),
+                            'lambda_function': Variable(
+                                f'websocket-{key}-integration-lambda-path'
+                            ),
+                            'handler_type': key,
+                        },
+                        output_var=f'{key}-integration-id',
+                    ),
+                )
             )
-            instructions.append(
-                models.APICall(
-                    method_name='create_websocket_integration',
-                    params={
-                        'api_id': Variable('websocket_api_id'),
-                        'lambda_function': Variable(
-                            'websocket-%s-integration-lambda-path' % key),
-                        'handler_type': key,
-                    },
-                    output_var='%s-integration-id' % key,
-                ),
-            )
+
         return instructions
 
     def _create_route_for_key(self, route_key):
@@ -1168,7 +1171,7 @@ class PlanStage(object):
         # type: (models.RestAPI) -> Sequence[InstructionMsg]
         function = resource.lambda_function
         function_name = function.function_name
-        varname = '%s_lambda_arn' % function.resource_name
+        varname = f'{function.resource_name}_lambda_arn'
         lambda_arn_var = Variable(varname)
         # There's a set of shared instructions that are needed
         # in both the update as well as the initial create case.
@@ -1228,16 +1231,19 @@ class PlanStage(object):
                 variable_name='rest_api_url',
             ),
         ]  # type: List[InstructionMsg]
-        for auth in resource.authorizers:
-            shared_plan_epilogue.append(
-                models.APICall(
-                    method_name='add_permission_for_apigateway',
-                    params={'function_name': auth.function_name,
-                            'region_name': Variable('region_name'),
-                            'account_id': Variable('account_id'),
-                            'rest_api_id': Variable('rest_api_id')},
-                )
+        shared_plan_epilogue.extend(
+            models.APICall(
+                method_name='add_permission_for_apigateway',
+                params={
+                    'function_name': auth.function_name,
+                    'region_name': Variable('region_name'),
+                    'account_id': Variable('account_id'),
+                    'rest_api_id': Variable('rest_api_id'),
+                },
             )
+            for auth in resource.authorizers
+        )
+
         if not self._remote_state.resource_exists(resource):
             plan = shared_plan_preamble + [
                 (models.APICall(
@@ -1316,9 +1322,9 @@ class PlanStage(object):
         if isinstance(resource, models.PreCreatedIAMRole):
             return resource.role_arn
         elif isinstance(resource, models.ManagedIAMRole):
-            return Variable('%s_role_arn' % resource.role_name)
+            return Variable(f'{resource.role_name}_role_arn')
         # Make mypy happy.
-        raise RuntimeError("Unknown resource type: %s" % resource)
+        raise RuntimeError(f"Unknown resource type: {resource}")
 
     def _batch_record_resource(self, resource_type, resource_name,
                                mapping):
@@ -1397,9 +1403,7 @@ class PlanEncoder(json.JSONEncoder):
     # https://github.com/PyCQA/pylint/issues/414
     def default(self, o):  # pylint: disable=E0202
         # type: (Any) -> Any
-        if isinstance(o, StringFormat):
-            return o.template
-        return o
+        return o.template if isinstance(o, StringFormat) else o
 
 
 class KeyDataVariable(object):

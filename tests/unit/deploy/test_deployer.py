@@ -84,12 +84,11 @@ def stubbed_client(service_name):
 
 @fixture
 def config_obj(sample_app):
-    config = Config.create(
+    return Config.create(
         chalice_app=sample_app,
         stage='dev',
         api_gateway_stage='api',
     )
-    return config
 
 
 @fixture
@@ -247,9 +246,7 @@ class FooResource(models.Model):
     leaf = attrib()
 
     def dependencies(self):
-        if not isinstance(self.leaf, list):
-            return [self.leaf]
-        return self.leaf
+        return self.leaf if isinstance(self.leaf, list) else [self.leaf]
 
 
 @attrs
@@ -270,7 +267,7 @@ def mock_osutils():
 def create_function_resource(name):
     return models.LambdaFunction(
         resource_name=name,
-        function_name='appname-dev-%s' % name,
+        function_name=f'appname-dev-{name}',
         environment_variables={},
         runtime='python2.7',
         handler='app.app',
@@ -389,7 +386,7 @@ class RoleTestCase(object):
         # roles_by_identifier, we'll verify that it's the exact same object.
         roles_by_identifier = {}
         for function_name, expected in self.roles.items():
-            full_name = 'appname-dev-%s' % function_name
+            full_name = f'appname-dev-{function_name}'
             assert full_name in functions_by_name
             actual_role = functions_by_name[full_name].role
             expectations = self.roles[function_name]
@@ -640,8 +637,7 @@ class TestPolicyGeneratorStage(object):
     def create_policy_generator(self, generator=None):
         if generator is None:
             generator = mock.Mock(spec=AppPolicyGenerator)
-        p = PolicyGenerator(generator, self.osutils)
-        return p
+        return PolicyGenerator(generator, self.osutils)
 
     def test_invokes_policy_generator(self):
         generator = mock.Mock(spec=AppPolicyGenerator)
@@ -691,8 +687,9 @@ class TestPolicyGeneratorStage(object):
         generator.generate_policy.return_value = {'Statement': []}
         policy = models.AutoGenIAMPolicy(
             document=models.Placeholder.BUILD_STAGE,
-            traits=set([models.RoleTraits.VPC_NEEDED]),
+            traits={models.RoleTraits.VPC_NEEDED},
         )
+
         config = Config.create()
 
         p = self.create_policy_generator(generator)

@@ -49,7 +49,8 @@ class NoSuchPackageError(Exception):
     def __init__(self, package_name):
         # type: (str) -> None
         super(NoSuchPackageError, self).__init__(
-            'Could not satisfy the requirement: %s' % package_name)
+            f'Could not satisfy the requirement: {package_name}'
+        )
 
 
 class PackageDownloadError(Exception):
@@ -65,7 +66,8 @@ class UnsupportedPackageError(Exception):
     def __init__(self, package_name):
         # type: (str) -> None
         super(UnsupportedPackageError, self).__init__(
-            'Unable to retrieve name/version for package: %s' % package_name)
+            f'Unable to retrieve name/version for package: {package_name}'
+        )
 
 
 class BaseLambdaDeploymentPackager(object):
@@ -129,10 +131,10 @@ class BaseLambdaDeploymentPackager(object):
             self._osutils.joinpath(project_dir, self._VENDOR_DIR),
             project_dir
         )
-        filename = '%s%s-%s.zip' % (prefix, hash_contents, python_version)
-        deployment_package_filename = self._osutils.joinpath(
-            project_dir, '.chalice', 'deployments', filename)
-        return deployment_package_filename
+        filename = f'{prefix}{hash_contents}-{python_version}.zip'
+        return self._osutils.joinpath(
+            project_dir, '.chalice', 'deployments', filename
+        )
 
     def _add_py_deps(self, zip_fileobj, deps_dir, prefix=''):
         # type: (ZipFile, str, str) -> None
@@ -166,17 +168,22 @@ class BaseLambdaDeploymentPackager(object):
             chalice_init = chalice_init[:-1]
         yield (chalice_init, 'chalice/__init__.py')
         yield (self._osutils.joinpath(project_dir, 'app.py'), 'app.py')
-        for filename in self._iter_chalice_lib_if_needed(project_dir):
-            yield filename
+        yield from self._iter_chalice_lib_if_needed(project_dir)
 
     def _hash_project_dir(self, requirements_filename, vendor_dir,
                           project_dir):
         # type: (str, str, str) -> str
-        if not self._osutils.file_exists(requirements_filename):
-            contents = b''
-        else:
-            contents = cast(bytes, self._osutils.get_file_contents(
-                requirements_filename, binary=True))
+        contents = (
+            cast(
+                bytes,
+                self._osutils.get_file_contents(
+                    requirements_filename, binary=True
+                ),
+            )
+            if self._osutils.file_exists(requirements_filename)
+            else b''
+        )
+
         h = hashlib.md5(contents)
         for filename, _ in self._iter_app_filenames(project_dir):
             with self._osutils.open(filename, 'rb') as f:
@@ -229,7 +236,7 @@ class BaseLambdaDeploymentPackager(object):
         # zip file that has all the same stuff except for the new
         # app file.
         self._ui.write("Regen deployment package.\n")
-        tmpzip = deployment_package_filename + '.tmp.zip'
+        tmpzip = f'{deployment_package_filename}.tmp.zip'
 
         with self._osutils.open_zip(deployment_package_filename, 'r') as inzip:
             with self._osutils.open_zip(tmpzip, 'w',
@@ -339,10 +346,10 @@ class AppOnlyDeploymentPackager(BaseLambdaDeploymentPackager):
                 for chunk in iter(reader, b''):
                     h.update(chunk)
         digest = h.hexdigest()
-        filename = '%s%s-%s.zip' % (prefix, digest, python_version)
-        deployment_package_filename = self._osutils.joinpath(
-            project_dir, '.chalice', 'deployments', filename)
-        return deployment_package_filename
+        filename = f'{prefix}{digest}-{python_version}.zip'
+        return self._osutils.joinpath(
+            project_dir, '.chalice', 'deployments', filename
+        )
 
 
 class LayerDeploymentPackager(BaseLambdaDeploymentPackager):
@@ -387,12 +394,12 @@ class LayerDeploymentPackager(BaseLambdaDeploymentPackager):
         # for them.  The caller will then need make the appropriate adjustments
         # i.e remove that LambdaLayer model from the app.
         with self._osutils.open_zip(package_filename,
-                                    'r', self._osutils.ZIP_DEFLATED) as z:
-            total_size = sum([f.file_size for f in z.infolist()])
+                                        'r', self._osutils.ZIP_DEFLATED) as z:
+            total_size = sum(f.file_size for f in z.infolist())
             # We have to check the total archive size, Lambda will still error
             # out if you have a zip file with all empty files.  It's not enough
             # to check if the zipfile is empty.
-            if not total_size > 0:
+            if total_size <= 0:
                 # We want to make sure we remove any deployment packages we
                 # know are invalid, we don't want them being used as cache
                 # hits in subsequent create_deployment_package() requests.
@@ -408,20 +415,26 @@ class LayerDeploymentPackager(BaseLambdaDeploymentPackager):
                                      prefix=''):
         # type: (str, str, str) -> str
         requirements_filename = self._get_requirements_filename(project_dir)
-        if not self._osutils.file_exists(requirements_filename):
-            contents = b''
-        else:
-            contents = cast(bytes, self._osutils.get_file_contents(
-                requirements_filename, binary=True))
+        contents = (
+            cast(
+                bytes,
+                self._osutils.get_file_contents(
+                    requirements_filename, binary=True
+                ),
+            )
+            if self._osutils.file_exists(requirements_filename)
+            else b''
+        )
+
         h = hashlib.md5(contents)
         vendor_dir = self._osutils.joinpath(project_dir, self._VENDOR_DIR)
         if self._osutils.directory_exists(vendor_dir):
             self._hash_vendor_dir(vendor_dir, h)
         hash_contents = h.hexdigest()
-        filename = '%s%s-%s.zip' % (prefix, hash_contents, python_version)
-        deployment_package_filename = self._osutils.joinpath(
-            project_dir, '.chalice', 'deployments', filename)
-        return deployment_package_filename
+        filename = f'{prefix}{hash_contents}-{python_version}.zip'
+        return self._osutils.joinpath(
+            project_dir, '.chalice', 'deployments', filename
+        )
 
 
 class DependencyBuilder(object):
@@ -585,9 +598,7 @@ class DependencyBuilder(object):
         # type: (str) -> Set[Package]
         packages = [Package(directory, filename) for filename
                     in self._osutils.get_directory_contents(directory)]
-        sdists = {package for package in packages
-                  if package.dist_type == 'sdist'}
-        return sdists
+        return {package for package in packages if package.dist_type == 'sdist'}
 
     def _build_sdists(self, sdists, directory, compile_c=True):
         # type: (Set[Package], str, bool) -> None
@@ -619,11 +630,10 @@ class DependencyBuilder(object):
         for package in deps:
             if package.dist_type == 'sdist':
                 sdists.add(package)
+            elif self._is_compatible_wheel_filename(abi, package.filename):
+                compatible_wheels.add(package)
             else:
-                if self._is_compatible_wheel_filename(abi, package.filename):
-                    compatible_wheels.add(package)
-                else:
-                    incompatible_wheels.add(package)
+                incompatible_wheels.add(package)
         return sdists, compatible_wheels, incompatible_wheels
 
     def _download_dependencies(self, abi, directory, requirements_filename):
@@ -807,7 +817,7 @@ class Package(object):
     def data_dir(self):
         # type: () -> str
         # The directory format is {distribution}-{version}.data
-        return '%s-%s.data' % (self._name, self._version)
+        return f'{self._name}-{self._version}.data'
 
     def matches_data_dir(self, dirname):
         # type: (str) -> bool
@@ -817,20 +827,20 @@ class Package(object):
         match against the package name's data dir.
 
         """
-        if not self.dist_type == 'wheel' or '-' not in dirname:
+        if self.dist_type != 'wheel' or '-' not in dirname:
             return False
         name, version = dirname.split('-')[:2]
-        comparison_data_dir = '%s-%s' % (self._normalize_name(name), version)
+        comparison_data_dir = f'{self._normalize_name(name)}-{version}'
         return self.data_dir == comparison_data_dir
 
     @property
     def identifier(self):
         # type: () -> str
-        return '%s==%s' % (self._name, self._version)
+        return f'{self._name}=={self._version}'
 
     def __str__(self):
         # type: () -> str
-        return '%s(%s)' % (self.identifier, self.dist_type)
+        return f'{self.identifier}({self.dist_type})'
 
     def __repr__(self):
         # type: () -> str
@@ -838,9 +848,11 @@ class Package(object):
 
     def __eq__(self, other):
         # type: (Any) -> bool
-        if not isinstance(other, Package):
-            return False
-        return self.identifier == other.identifier
+        return (
+            self.identifier == other.identifier
+            if isinstance(other, Package)
+            else False
+        )
 
     def __hash__(self):
         # type: () -> int
@@ -909,8 +921,7 @@ class SDistMetadataFetcher(object):
         if p.returncode != 0:
             logger.debug("Non zero rc (%s) from the setup.py egg_info "
                          "command: %s", p.returncode, stderr)
-        info_contents = self._osutils.get_directory_contents(egg_info_dir)
-        if info_contents:
+        if info_contents := self._osutils.get_directory_contents(egg_info_dir):
             pkg_info_path = self._osutils.joinpath(
                 egg_info_dir, info_contents[0], 'PKG-INFO')
         else:
@@ -969,10 +980,8 @@ class SubprocessPip(object):
         if shim is None:
             shim = ''
         python_exe = sys.executable
-        run_pip = (
-            'import sys; %s; sys.exit(main(%s))'
-        ) % (self._import_string, args)
-        exec_string = '%s%s' % (shim, run_pip)
+        run_pip = f'import sys; {self._import_string}; sys.exit(main({args}))'
+        exec_string = f'{shim}{run_pip}'
         invoke_pip = [python_exe, '-c', exec_string]
         p = self._osutils.popen(invoke_pip,
                                 stdout=self._osutils.pipe,
@@ -1041,10 +1050,12 @@ class PipRunner(object):
             if err is None:
                 err = b'Unknown error'
             error = err.decode()
-            match = re.search(r"Could not find a version that satisfies the "
-                              r"requirement ([^\s]+)", error)
-            if match:
-                package_name = match.group(1)
+            if match := re.search(
+                r"Could not find a version that satisfies the "
+                r"requirement ([^\s]+)",
+                error,
+            ):
+                package_name = match[1]
                 raise NoSuchPackageError(str(package_name))
             raise PackageDownloadError(error)
         stdout = out.decode()

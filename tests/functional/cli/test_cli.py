@@ -64,10 +64,11 @@ def _run_cli_command(runner, function, args, cli_factory=None):
     # what 'def cli(...)' is doing.
     if cli_factory is None:
         cli_factory = factory.CLIFactory('.')
-    result = runner.invoke(
-        function, args, obj={'project_dir': '.', 'debug': False,
-                             'factory': cli_factory})
-    return result
+    return runner.invoke(
+        function,
+        args,
+        obj={'project_dir': '.', 'debug': False, 'factory': cli_factory},
+    )
 
 
 def test_create_new_project_creates_app(runner):

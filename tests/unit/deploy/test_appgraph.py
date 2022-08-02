@@ -100,8 +100,7 @@ class TestApplicationGraphBuilder(object):
         if reserved_concurrency is not None:
             kwargs['reserved_concurrency'] = reserved_concurrency
         kwargs['layers'] = layers
-        config = Config.create(**kwargs)
-        return config
+        return Config.create(**kwargs)
 
     def test_can_build_single_lambda_function_app(self,
                                                   sample_app_lambda_only):
@@ -294,7 +293,7 @@ class TestApplicationGraphBuilder(object):
         policy = application.resources[0].role.policy
         assert policy == models.AutoGenIAMPolicy(
             document=models.Placeholder.BUILD_STAGE,
-            traits=set([models.RoleTraits.VPC_NEEDED]),
+            traits={models.RoleTraits.VPC_NEEDED},
         )
 
     def test_exception_raised_when_missing_vpc_params(self,

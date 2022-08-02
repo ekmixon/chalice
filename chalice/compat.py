@@ -31,8 +31,7 @@ def pip_import_string():
     elif (20, 0) <= pip_major_minor < (22, 0):
         # More changes! https://github.com/pypa/pip/issues/7498
         return 'from pip._internal.cli.main import main'
-    raise RuntimeError("Unknown import string for pip version: %s"
-                       % str(pip_major_minor))
+    raise RuntimeError(f"Unknown import string for pip version: {pip_major_minor}")
 
 
 if os.name == 'nt':

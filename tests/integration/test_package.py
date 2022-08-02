@@ -40,7 +40,7 @@ def app_skeleton(tmpdir, runner):
 
 
 def _get_random_package_name():
-    return 'foobar-%s' % str(uuid.uuid4())[:8]
+    return f'foobar-{str(uuid.uuid4())[:8]}'
 
 
 # This test can take a while, but you can set this env var to make sure that
@@ -100,9 +100,9 @@ def assert_can_package_dependency(
     package_file = ZipFile(package_path)
     package_content = package_file.namelist()
     for content in contents:
-        assert any(fnmatch.fnmatch(filename, content)
-                   for filename in package_content), (
-                       "No match found for %s" % content)
+        assert any(
+            fnmatch.fnmatch(filename, content) for filename in package_content
+        ), f"No match found for {content}"
 
 
 class TestPackage(object):
@@ -171,7 +171,7 @@ class TestPackage(object):
         assert result.exception is not None
         ex = result.exception
         assert isinstance(ex, NoSuchPackageError)
-        assert str(ex) == 'Could not satisfy the requirement: %s' % package
+        assert str(ex) == f'Could not satisfy the requirement: {package}'
 
     def test_packaging_requirements_keeps_same_hash(self, runner,
                                                     app_skeleton,

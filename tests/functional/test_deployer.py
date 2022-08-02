@@ -28,11 +28,9 @@ def chalice_deployer():
     ui = chalice.utils.UI()
     osutils = chalice.utils.OSUtils()
     dependency_builder = mock.Mock(spec=DependencyBuilder)
-    d = chalice.deploy.packager.LambdaDeploymentPackager(
-        osutils=osutils, dependency_builder=dependency_builder,
-        ui=ui
+    return chalice.deploy.packager.LambdaDeploymentPackager(
+        osutils=osutils, dependency_builder=dependency_builder, ui=ui
     )
-    return d
 
 
 @fixture
@@ -271,10 +269,9 @@ def test_py_deps_in_layer_package(tmpdir, layer_packager):
     assert os.path.basename(name).startswith('managed-layer-')
     with zipfile.ZipFile(name) as f:
         prefix = 'python/lib/python2.7/site-packages'
-        _assert_in_zip(
-            '%s/mypackage/__init__.py' % prefix, b'# Test package', f)
-        _assert_not_in_zip('%s/chalicelib/__init__.py' % prefix, f)
-        _assert_not_in_zip('%s/app.py' % prefix, f)
+        _assert_in_zip(f'{prefix}/mypackage/__init__.py', b'# Test package', f)
+        _assert_not_in_zip(f'{prefix}/chalicelib/__init__.py', f)
+        _assert_not_in_zip(f'{prefix}/app.py', f)
     deps_builder.build_site_packages.assert_called_with(
         'cp27mu', str(appdir.join('requirements.txt')), mock.ANY
     )
@@ -397,7 +394,9 @@ def test_does_handle_missing_dependency_error(tmpdir):
     fake_package = mock.Mock(spec=Package)
     fake_package.identifier = 'foo==1.2'
     builder.build_site_packages.side_effect = MissingDependencyError(
-        set([fake_package]))
+        {fake_package}
+    )
+
     ui = mock.Mock(spec=chalice.utils.UI)
     osutils = chalice.utils.OSUtils()
     packager = LambdaDeploymentPackager(

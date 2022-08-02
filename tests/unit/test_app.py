@@ -95,8 +95,7 @@ class FakeLambdaContext(object):
         return 500
 
     def serialize(self):
-        serialized = {}
-        serialized.update(vars(self))
+        serialized = {} | vars(self)
         serialized['identity'] = vars(self.identity)
         return serialized
 
@@ -130,8 +129,7 @@ class FakeClient(object):
     def get_connection(self, ConnectionId):
         self._call('info', ConnectionId)
         if self._infos is not None:
-            info = self._infos.pop()
-            return info
+            return self._infos.pop()
 
     def _call(self, name, *args):
         self.calls[name].append(tuple(args))
@@ -199,9 +197,7 @@ def assert_requires_opt_in(app, flag):
 
 def websocket_handler_for_route(route, app):
     fn = app.websocket_handlers[route].handler_function
-    handler = WebsocketEventSourceHandler(
-        fn, WebsocketEvent, app.websocket_api)
-    return handler
+    return WebsocketEventSourceHandler(fn, WebsocketEvent, app.websocket_api)
 
 
 @fixture
@@ -351,8 +347,7 @@ def sample_middleware_app():
 def auth_request():
     method_arn = (
         "arn:aws:execute-api:us-west-2:123:rest-api-id/dev/GET/needs/auth")
-    request = app.AuthRequest('TOKEN', 'authtoken', method_arn)
-    return request
+    return app.AuthRequest('TOKEN', 'authtoken', method_arn)
 
 
 @pytest.mark.skipif(sys.version[0] == '2',
@@ -983,7 +978,7 @@ def test_route_inequality(view_function):
         # Different content types
         content_types=['application/xml'],
     )
-    assert not a == b
+    assert a != b
 
 
 def test_exceptions_raised_as_chalice_errors(sample_app, create_event):
@@ -1211,8 +1206,7 @@ class TestCORSConfig(object):
 
     def test_not_eq_different_type(self):
         cors_config = app.CORSConfig()
-        different_type_obj = object()
-        assert not cors_config == different_type_obj
+        assert cors_config != object()
 
     def test_not_eq_differing_configurations(self):
         cors_config = app.CORSConfig()
@@ -1701,8 +1695,9 @@ def test_pure_lambda_functions_are_registered_in_app(sample_app):
 def test_aws_execution_env_set():
     env = {'AWS_EXECUTION_ENV': 'AWS_Lambda_python2.7'}
     app.Chalice('app-name', env=env)
-    assert env['AWS_EXECUTION_ENV'] == (
-        'AWS_Lambda_python2.7 aws-chalice/%s' % chalice_version
+    assert (
+        env['AWS_EXECUTION_ENV']
+        == f'AWS_Lambda_python2.7 aws-chalice/{chalice_version}'
     )
 
 
@@ -1744,7 +1739,7 @@ def test_can_set_debug_mode_in_initialzier():
 def test_debug_mode_changes_log_level():
     test_app = app.Chalice('logger-test-4', debug=False)
     test_app.debug = True
-    assert test_app.debug is True
+    assert test_app.debug
     assert test_app.log.getEffectiveLevel() == logging.DEBUG
 
 
@@ -1782,13 +1777,7 @@ def test_raw_body_is_none_if_body_is_none():
 
 @given(http_request_event=HTTP_REQUEST)
 def test_http_request_to_dict_is_json_serializable(http_request_event):
-    # We have to do some slight pre-preprocessing here
-    # to maintain preconditions.  If the
-    # is_base64_encoded arg is True, we'll
-    # base64 encode the body.  We assume API Gateway
-    # upholds this precondition.
-    is_base64_encoded = http_request_event['isBase64Encoded']
-    if is_base64_encoded:
+    if is_base64_encoded := http_request_event['isBase64Encoded']:
         # Confirmed that if you send an empty body,
         # API Gateway will always say the body is *not*
         # base64 encoded.

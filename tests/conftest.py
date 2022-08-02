@@ -165,8 +165,7 @@ class ChaliceStubber(Stubber):
 
 @fixture
 def stubbed_session():
-    s = StubbedSession()
-    return s
+    return StubbedSession()
 
 
 @fixture

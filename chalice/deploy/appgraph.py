@@ -59,13 +59,9 @@ class ApplicationGraphBuilder(object):
         url_prefix = domain_name_data.get("url_prefix", '(none)')
         api_mapping_model = self._create_api_mapping_model(
             url_prefix, api_gateway_stage)
-        domain_name = self._create_domain_name_model(
-            api_type,
-            domain_name_data,
-            endpoint_configuration,
-            api_mapping_model
+        return self._create_domain_name_model(
+            api_type, domain_name_data, endpoint_configuration, api_mapping_model
         )
-        return domain_name
 
     def _create_api_mapping_model(self,
                                   key,         # type: str
@@ -143,7 +139,7 @@ class ApplicationGraphBuilder(object):
         # lambda function for the API handler doesn't have the
         # resource_name appended to its complete function_name,
         # it's just <app>-<stage>.
-        function_name = '%s-%s' % (config.app_name, config.chalice_stage)
+        function_name = f'{config.app_name}-{config.chalice_stage}'
         lambda_function.function_name = function_name
         if config.minimum_compression_size is None:
             minimum_compression = ''
@@ -247,15 +243,17 @@ class ApplicationGraphBuilder(object):
             )
 
         return models.WebsocketAPI(
-            name='%s-%s-websocket-api' % (config.app_name, stage_name),
+            name=f'{config.app_name}-{stage_name}-websocket-api',
             resource_name='websocket_api',
             connect_function=connect_handler,
             message_function=message_handler,
             disconnect_function=disconnect_handler,
-            routes=[h.route_key_handled for h
-                    in config.chalice_app.websocket_handlers.values()],
+            routes=[
+                h.route_key_handled
+                for h in config.chalice_app.websocket_handlers.values()
+            ],
             api_gateway_stage=config.api_gateway_stage,
-            domain_name=custom_domain_name
+            domain_name=custom_domain_name,
         )
 
     def _create_cwe_subscription(
@@ -271,16 +269,14 @@ class ApplicationGraphBuilder(object):
             handler_name=event_source.handler_string, stage_name=stage_name
         )
 
-        resource_name = event_source.name + '-event'
-        rule_name = '%s-%s-%s' % (config.app_name, config.chalice_stage,
-                                  resource_name)
-        cwe = models.CloudWatchEvent(
+        resource_name = f'{event_source.name}-event'
+        rule_name = f'{config.app_name}-{config.chalice_stage}-{resource_name}'
+        return models.CloudWatchEvent(
             resource_name=resource_name,
             rule_name=rule_name,
             event_pattern=json.dumps(event_source.event_pattern),
             lambda_function=lambda_function,
         )
-        return cwe
 
     def _create_scheduled_model(self,
                                 config,        # type: Config
@@ -302,22 +298,20 @@ class ApplicationGraphBuilder(object):
         # '-event' to the name.  Ideally this is handled in app.py
         # but we won't be able to do that until the old deployer
         # is gone.
-        resource_name = event_source.name + '-event'
+        resource_name = f'{event_source.name}-event'
         if isinstance(event_source.schedule_expression,
                       app.ScheduleExpression):
             expression = event_source.schedule_expression.to_string()
         else:
             expression = event_source.schedule_expression
-        rule_name = '%s-%s-%s' % (config.app_name, config.chalice_stage,
-                                  resource_name)
-        scheduled_event = models.ScheduledEvent(
+        rule_name = f'{config.app_name}-{config.chalice_stage}-{resource_name}'
+        return models.ScheduledEvent(
             resource_name=resource_name,
             rule_name=rule_name,
             rule_description=event_source.description,
             schedule_expression=expression,
             lambda_function=lambda_function,
         )
-        return scheduled_event
 
     def _create_domain_name_model(self,
                                   protocol,        # type: models.APIType
@@ -332,16 +326,15 @@ class ApplicationGraphBuilder(object):
             'WEBSOCKET': 'websocket_api_custom_domain'
         }  # type: Dict[str, str]
 
-        domain_name = models.DomainName(
+        return models.DomainName(
             protocol=protocol,
             resource_name=resource_name_map.get(protocol.value, default_name),
             domain_name=data['domain_name'],
             tls_version=models.TLSVersion.create(data.get('tls_version', '')),
             certificate_arn=data['certificate_arn'],
             tags=data.get('tags'),
-            api_mapping=api_mapping
+            api_mapping=api_mapping,
         )
-        return domain_name
 
     def _create_lambda_model(self,
                              config,        # type: Config
@@ -357,11 +350,9 @@ class ApplicationGraphBuilder(object):
         )
         role = self._get_role_reference(
             new_config, stage_name, name)
-        resource = self._build_lambda_function(
-            new_config, name, handler_name,
-            deployment, role
+        return self._build_lambda_function(
+            new_config, name, handler_name, deployment, role
         )
-        return resource
 
     def _get_managed_lambda_layer(self, config):
         # type: (Config) -> Optional[models.LambdaLayer]
@@ -370,12 +361,13 @@ class ApplicationGraphBuilder(object):
         if self._managed_layer is None:
             self._managed_layer = models.LambdaLayer(
                 resource_name='managed-layer',
-                layer_name='%s-%s-%s' % (
-                    config.app_name, config.chalice_stage, 'managed-layer'),
+                layer_name=f'{config.app_name}-{config.chalice_stage}-managed-layer',
                 runtime=config.lambda_python_version,
                 deployment_package=models.DeploymentPackage(
-                    models.Placeholder.BUILD_STAGE)
+                    models.Placeholder.BUILD_STAGE
+                ),
             )
+
         return self._managed_layer
 
     def _get_role_reference(self, config, stage_name, function_name):
@@ -411,22 +403,22 @@ class ApplicationGraphBuilder(object):
             )
         policy = models.IAMPolicy(document=models.Placeholder.BUILD_STAGE)
         if not config.autogen_policy:
-            resource_name = '%s_role' % function_name
-            role_name = '%s-%s-%s' % (config.app_name, stage_name,
-                                      function_name)
+            resource_name = f'{function_name}_role'
+            role_name = f'{config.app_name}-{stage_name}-{function_name}'
             if config.iam_policy_file is not None:
                 filename = os.path.join(config.project_dir,
                                         '.chalice',
                                         config.iam_policy_file)
             else:
-                filename = os.path.join(config.project_dir,
-                                        '.chalice',
-                                        'policy-%s.json' % stage_name)
+                filename = os.path.join(
+                    config.project_dir, '.chalice', f'policy-{stage_name}.json'
+                )
+
             policy = models.FileBasedIAMPolicy(
                 filename=filename, document=models.Placeholder.BUILD_STAGE)
         else:
             resource_name = 'default-role'
-            role_name = '%s-%s' % (config.app_name, stage_name)
+            role_name = f'{config.app_name}-{stage_name}'
             policy = models.AutoGenIAMPolicy(
                 document=models.Placeholder.BUILD_STAGE,
                 traits=set([]),
@@ -459,7 +451,7 @@ class ApplicationGraphBuilder(object):
     def _get_lambda_layers(self, config):
         # type: (Config) -> List[str]
         layers = config.layers
-        return layers if layers else []
+        return layers or []
 
     def _build_lambda_function(self,
                                config,        # type: Config
@@ -469,8 +461,7 @@ class ApplicationGraphBuilder(object):
                                role,          # type: models.IAMRole
                                ):
         # type: (...) -> models.LambdaFunction
-        function_name = '%s-%s-%s' % (
-            config.app_name, config.chalice_stage, name)
+        function_name = f'{config.app_name}-{config.chalice_stage}-{name}'
         security_group_ids, subnet_ids = self._get_vpc_params(name, config)
         lambda_layers = self._get_lambda_layers(config)
         function = models.LambdaFunction(
@@ -516,8 +507,8 @@ class ApplicationGraphBuilder(object):
             config=config, deployment=deployment, name=s3_event.name,
             handler_name=s3_event.handler_string, stage_name=stage_name
         )
-        resource_name = s3_event.name + '-s3event'
-        s3_bucket = models.S3BucketNotification(
+        resource_name = f'{s3_event.name}-s3event'
+        return models.S3BucketNotification(
             resource_name=resource_name,
             bucket=s3_event.bucket,
             prefix=s3_event.prefix,
@@ -525,7 +516,6 @@ class ApplicationGraphBuilder(object):
             events=s3_event.events,
             lambda_function=lambda_function,
         )
-        return s3_bucket
 
     def _create_sns_subscription(
         self,
@@ -539,13 +529,12 @@ class ApplicationGraphBuilder(object):
             config=config, deployment=deployment, name=sns_config.name,
             handler_name=sns_config.handler_string, stage_name=stage_name
         )
-        resource_name = sns_config.name + '-sns-subscription'
-        sns_subscription = models.SNSLambdaSubscription(
+        resource_name = f'{sns_config.name}-sns-subscription'
+        return models.SNSLambdaSubscription(
             resource_name=resource_name,
             topic=sns_config.topic,
             lambda_function=lambda_function,
         )
-        return sns_subscription
 
     def _create_sqs_subscription(
         self,
@@ -559,19 +548,18 @@ class ApplicationGraphBuilder(object):
             config=config, deployment=deployment, name=sqs_config.name,
             handler_name=sqs_config.handler_string, stage_name=stage_name
         )
-        resource_name = sqs_config.name + '-sqs-event-source'
+        resource_name = f'{sqs_config.name}-sqs-event-source'
         queue = ''  # type: Union[str, models.QueueARN]
         if sqs_config.queue_arn is not None:
             queue = models.QueueARN(arn=sqs_config.queue_arn)
         elif sqs_config.queue is not None:
             queue = sqs_config.queue
-        sqs_event_source = models.SQSEventSource(
+        return models.SQSEventSource(
             resource_name=resource_name,
             queue=queue,
             batch_size=sqs_config.batch_size,
             lambda_function=lambda_function,
         )
-        return sqs_event_source
 
     def _create_kinesis_subscription(
         self,
@@ -585,15 +573,14 @@ class ApplicationGraphBuilder(object):
             config=config, deployment=deployment, name=kinesis_config.name,
             handler_name=kinesis_config.handler_string, stage_name=stage_name
         )
-        resource_name = kinesis_config.name + '-kinesis-event-source'
-        kinesis_event_source = models.KinesisEventSource(
+        resource_name = f'{kinesis_config.name}-kinesis-event-source'
+        return models.KinesisEventSource(
             resource_name=resource_name,
             stream=kinesis_config.stream,
             batch_size=kinesis_config.batch_size,
             starting_position=kinesis_config.starting_position,
             lambda_function=lambda_function,
         )
-        return kinesis_event_source
 
     def _create_ddb_subscription(
         self,
@@ -607,15 +594,14 @@ class ApplicationGraphBuilder(object):
             config=config, deployment=deployment, name=ddb_config.name,
             handler_name=ddb_config.handler_string, stage_name=stage_name
         )
-        resource_name = ddb_config.name + '-dynamodb-event-source'
-        ddb_event_source = models.DynamoDBEventSource(
+        resource_name = f'{ddb_config.name}-dynamodb-event-source'
+        return models.DynamoDBEventSource(
             resource_name=resource_name,
             stream_arn=ddb_config.stream_arn,
             batch_size=ddb_config.batch_size,
             starting_position=ddb_config.starting_position,
             lambda_function=lambda_function,
         )
-        return ddb_event_source
 
 
 class DependencyBuilder(object):
@@ -661,7 +647,7 @@ class GraphPrettyPrint(object):
 
     def _traverse(self, graph, level):
         # type: (models.Model, int) -> None
-        prefix = ('%s   ' % self._LINE_VERTICAL) * level
+        prefix = f'{self._LINE_VERTICAL}   ' * level
         spaces = prefix + self._NEW_SECTION + ' '
         model_text = self._get_model_text(graph, spaces, level)
         current_line = cast(str, '%s%s\n' % (spaces, model_text))
@@ -674,14 +660,14 @@ class GraphPrettyPrint(object):
         name = model.__class__.__name__
         filtered = self._get_filtered_params(model)
         if not filtered:
-            return '%s()' % name
+            return f'{name}()'
         total_len_prefix = len(spaces) + len(name) + 1
-        prefix = ('%s   ' % self._LINE_VERTICAL) * (level + 2)
-        full = '%s%s' % (prefix, ' ' * (total_len_prefix - len(prefix)))
+        prefix = f'{self._LINE_VERTICAL}   ' * (level + 2)
+        full = f"{prefix}{' ' * (total_len_prefix - len(prefix))}"
         param_items = list(filtered.items())
         first = param_items[0]
         remaining = param_items[1:]
-        lines = ['%s(%s=%s,' % (name, first[0], first[1])]
+        lines = [f'{name}({first[0]}={first[1]},']
         self._add_remaining_lines(lines, remaining, full)
         return '\n'.join(lines) + ')'
 
@@ -690,12 +676,10 @@ class GraphPrettyPrint(object):
         for key, value in remaining:
             if isinstance(value, (list, dict)):
                 value = key.upper()
-            current = cast(str, '%s%s=%s,' % (full, key, value))
+            current = cast(str, f'{full}{key}={value},')
             lines.append(current)
 
     def _get_filtered_params(self, model):
         # type: (models.Model) -> StrMapAny
         dependencies = model.dependencies()
-        filtered = asdict(
-            model, filter=lambda _, v: v not in dependencies and v)
-        return filtered
+        return asdict(model, filter=lambda _, v: v not in dependencies and v)

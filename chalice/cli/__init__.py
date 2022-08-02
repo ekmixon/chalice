@@ -54,19 +54,16 @@ def _configure_logging(level, format_string=None):
 
 def get_system_info():
     # type: () -> str
-    python_info = "python {}.{}.{}".format(sys.version_info[0],
-                                           sys.version_info[1],
-                                           sys.version_info[2])
+    python_info = f"python {sys.version_info[0]}.{sys.version_info[1]}.{sys.version_info[2]}"
+
     platform_system = platform.system().lower()
     platform_release = platform.release()
-    platform_info = "{} {}".format(platform_system, platform_release)
-    return "{}, {}".format(python_info, platform_info)
+    platform_info = f"{platform_system} {platform_release}"
+    return f"{python_info}, {platform_info}"
 
 
 @click.group()
-@click.version_option(version=chalice_version,
-                      message='%(prog)s %(version)s, {}'
-                      .format(get_system_info()))
+@click.version_option(version=chalice_version, message=f'%(prog)s %(version)s, {get_system_info()}')
 @click.option('--project-dir',
               help='The project directory path (absolute or relative).'
                    'Defaults to CWD')
@@ -145,8 +142,7 @@ def create_local_server(factory, host, port, stage):
     # there is no point in testing locally.
     routes = config.chalice_app.routes
     validate_routes(routes)
-    server = factory.create_local_server(app_obj, config, host, port)
-    return server
+    return factory.create_local_server(app_obj, config, host, port)
 
 
 def run_local_server(factory, host, port, stage):
@@ -298,8 +294,7 @@ def invoke(ctx, name, profile, stage):
         payload = factory.create_stdin_reader().read()
         invoke_handler.invoke(payload)
     except NoSuchFunctionError as e:
-        err = click.ClickException(
-            "could not find a lambda function named %s." % e.name)
+        err = click.ClickException(f"could not find a lambda function named {e.name}.")
         err.exit_code = 2
         raise err
     except botocore.exceptions.ClientError as e:
@@ -396,7 +391,7 @@ def gen_policy(ctx, filename):
     if filename is None:
         filename = os.path.join(ctx.obj['project_dir'], 'app.py')
     if not os.path.isfile(filename):
-        click.echo("App file does not exist: %s" % filename, err=True)
+        click.echo(f"App file does not exist: {filename}", err=True)
         raise click.Abort()
     with open(filename) as f:
         contents = f.read()
@@ -417,12 +412,12 @@ def new_project(ctx, project_name, profile, project_type):
         project_name = answers['project_name']
         project_type = answers['project_type']
     if os.path.isdir(project_name):
-        click.echo("Directory already exists: %s" % project_name, err=True)
+        click.echo(f"Directory already exists: {project_name}", err=True)
         raise click.Abort()
     newproj.create_new_project_skeleton(
         project_name, project_type=project_type)
     validate_python_version(Config.create())
-    click.echo("Your project has been generated in ./%s" % project_name)
+    click.echo(f"Your project has been generated in ./{project_name}")
 
 
 @cli.command('url')

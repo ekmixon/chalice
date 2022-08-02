@@ -490,7 +490,7 @@ class TestConfigureTags(object):
     def test_default_tags(self):
         c = Config('dev', config_from_disk={'app_name': 'myapp'})
         assert c.tags == {
-            'aws-chalice': 'version=%s:stage=dev:app=myapp' % chalice_version
+            'aws-chalice': f'version={chalice_version}:stage=dev:app=myapp'
         }
 
     def test_tags_global(self):
@@ -501,7 +501,7 @@ class TestConfigureTags(object):
         c = Config('dev', config_from_disk=config_from_disk)
         assert c.tags == {
             'mykey': 'myvalue',
-            'aws-chalice': 'version=%s:stage=dev:app=myapp' % chalice_version
+            'aws-chalice': f'version={chalice_version}:stage=dev:app=myapp',
         }
 
     def test_tags_stage(self):
@@ -516,7 +516,7 @@ class TestConfigureTags(object):
         c = Config('dev', config_from_disk=config_from_disk)
         assert c.tags == {
             'mykey': 'myvalue',
-            'aws-chalice': 'version=%s:stage=dev:app=myapp' % chalice_version
+            'aws-chalice': f'version={chalice_version}:stage=dev:app=myapp',
         }
 
     def test_tags_merge(self):
@@ -552,7 +552,7 @@ class TestConfigureTags(object):
             'onlyfunctionkey': 'functionvalue',
             'sharedstage': 'stagevalue',
             'sharedkey': 'functionvalue',
-            'aws-chalice': 'version=%s:stage=dev:app=myapp' % chalice_version
+            'aws-chalice': f'version={chalice_version}:stage=dev:app=myapp',
         }
 
     def test_tags_specified_does_not_override_chalice_tag(self):
@@ -560,7 +560,7 @@ class TestConfigureTags(object):
             chalice_stage='dev', app_name='myapp',
             tags={'aws-chalice': 'attempted-override'})
         assert c.tags == {
-            'aws-chalice': 'version=%s:stage=dev:app=myapp' % chalice_version,
+            'aws-chalice': f'version={chalice_version}:stage=dev:app=myapp'
         }
 
 

@@ -92,7 +92,7 @@ class TestTodoDB(unittest.TestCase):
 class TestDynamoDB(TestTodoDB):
     @classmethod
     def setUpClass(cls):
-        cls.TABLE_NAME = 'todo-integ-%s' % str(uuid4())
+        cls.TABLE_NAME = f'todo-integ-{str(uuid4())}'
         client = boto3.client('dynamodb')
         client.create_table(
             TableName=cls.TABLE_NAME,

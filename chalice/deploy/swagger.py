@@ -104,10 +104,8 @@ class SwaggerGenerator(object):
 
     def _auth_uri(self, authorizer):
         # type: (ChaliceAuthorizer) -> str
-        function_name = '%s-%s' % (
-            self._deployed_resources['api_handler_name'],
-            authorizer.config.name
-        )
+        function_name = f"{self._deployed_resources['api_handler_name']}-{authorizer.config.name}"
+
         return self._uri(
             self._deployed_resources['lambda_functions'][function_name]['arn'])
 
@@ -137,8 +135,7 @@ class SwaggerGenerator(object):
             'x-amazon-apigateway-integration': self._generate_apig_integ(
                 view),
         }  # type: Dict[str, Any]
-        docstring = inspect.getdoc(view.view_function)
-        if docstring:
+        if docstring := inspect.getdoc(view.view_function):
             doc_lines = docstring.splitlines()
             current['summary'] = doc_lines[0]
             if len(doc_lines) > 1:
@@ -157,16 +154,14 @@ class SwaggerGenerator(object):
         return current
 
     def _generate_precanned_responses(self):
-        # type: () -> Dict[str, Any]
-        responses = {
+        return {
             '200': {
                 'description': '200 response',
                 'schema': {
                     '$ref': '#/definitions/Empty',
-                }
+                },
             }
         }
-        return responses
 
     def _uri(self, lambda_arn=None):
         # type: (Optional[str]) -> Any
@@ -179,8 +174,7 @@ class SwaggerGenerator(object):
                     lambda_arn=lambda_arn)
 
     def _generate_apig_integ(self, view):
-        # type: (RouteEntry) -> Dict[str, Any]
-        apig_integ = {
+        return {
             'responses': {
                 'default': {
                     'statusCode': "200",
@@ -192,7 +186,6 @@ class SwaggerGenerator(object):
             'contentHandling': 'CONVERT_TO_TEXT',
             'type': 'aws_proxy',
         }
-        return apig_integ
 
     def _add_view_args(self, single_method, view_args):
         # type: (Dict[str, Any], List[str]) -> None
@@ -206,14 +199,15 @@ class SwaggerGenerator(object):
         methods = methods + ['OPTIONS']
         allowed_methods = ','.join(methods)
 
-        response_params = {
-            'Access-Control-Allow-Methods': '%s' % allowed_methods
-        }
-        response_params.update(cors.get_access_control_headers())
+        response_params = {'Access-Control-Allow-Methods': f'{allowed_methods}'}
+        response_params |= cors.get_access_control_headers()
 
-        headers = {k: {'type': 'string'} for k, _ in response_params.items()}
-        response_params = {'method.response.header.%s' % k: "'%s'" % v for k, v
-                           in response_params.items()}
+        headers = {k: {'type': 'string'} for k in response_params}
+        response_params = {
+            f'method.response.header.{k}': "'%s'" % v
+            for k, v in response_params.items()
+        }
+
 
         options_request = {
             "consumes": ["application/json"],
@@ -285,7 +279,7 @@ class TemplatedSwaggerGenerator(SwaggerGenerator):
 
     def _auth_uri(self, authorizer):
         # type: (ChaliceAuthorizer) -> Any
-        varname = '%s_lambda_arn' % authorizer.name
+        varname = f'{authorizer.name}_lambda_arn'
         return StringFormat(
             'arn:{partition}:apigateway:{region_name}:lambda:path/2015-03-31'
             '/functions/{%s}/invocations' % varname,

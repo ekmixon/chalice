@@ -247,7 +247,7 @@ class TestCompositePostProcessor(object):
         config = mock.MagicMock(spec=Config)
         processor.process(template, config, 'out', 'dev')
 
-        assert template == {}
+        assert not template
 
     def test_does_call_processors_once(self):
         mock_processor_a = mock.Mock(spec=package.TemplatePostProcessor)
@@ -1253,7 +1253,7 @@ class TestSAMTemplate(TemplateTestBase):
             assert resources[handler]['Type'] == 'AWS::Serverless::Function'
 
             # Along with permission to invoke from API Gateway.
-            assert resources['%sInvokePermission' % handler] == {
+            assert resources[f'{handler}InvokePermission'] == {
                 'Type': 'AWS::Lambda::Permission',
                 'Properties': {
                     'Action': 'lambda:InvokeFunction',
@@ -1266,16 +1266,18 @@ class TestSAMTemplate(TemplateTestBase):
                                 ':${AWS::Region}:${AWS::'
                                 'AccountId}:${WebsocketAPIId}/*'
                             ),
-                            {'WebsocketAPIId': {'Ref': 'WebsocketAPI'}}]}},
+                            {'WebsocketAPIId': {'Ref': 'WebsocketAPI'}},
+                        ]
+                    },
+                },
             }
 
+
             # Ensure Integration is created.
-            assert resources['%sAPIIntegration' % handler] == {
+            assert resources[f'{handler}APIIntegration'] == {
                 'Type': 'AWS::ApiGatewayV2::Integration',
                 'Properties': {
-                    'ApiId': {
-                        'Ref': 'WebsocketAPI'
-                    },
+                    'ApiId': {'Ref': 'WebsocketAPI'},
                     'ConnectionType': 'INTERNET',
                     'ContentHandlingStrategy': 'CONVERT_TO_TEXT',
                     'IntegrationType': 'AWS_PROXY',
@@ -1288,40 +1290,40 @@ class TestSAMTemplate(TemplateTestBase):
                                 ':lambda:${AWS::Region}:${AWS::AccountId}'
                                 ':function:${WebsocketHandler}/invocations'
                             ),
-                            {'WebsocketHandler': {'Ref': handler}}
+                            {'WebsocketHandler': {'Ref': handler}},
                         ],
-                    }
-                }
+                    },
+                },
             }
 
+
             # Route for the handler.
-            assert resources['%sRoute' % handler] == {
+            assert resources[f'{handler}Route'] == {
                 'Type': 'AWS::ApiGatewayV2::Route',
                 'Properties': {
-                    'ApiId': {
-                        'Ref': 'WebsocketAPI'
-                    },
+                    'ApiId': {'Ref': 'WebsocketAPI'},
                     'RouteKey': route,
                     'Target': {
                         'Fn::Join': [
                             '/',
-                            [
-                                'integrations',
-                                {'Ref': '%sAPIIntegration' % handler},
-                            ]
+                            ['integrations', {'Ref': f'{handler}APIIntegration'}],
                         ]
-                    }
-                }
+                    },
+                },
             }
+
 
         # Ensure the deployment is created. It must manually depend on
         # the routes since it cannot be created for WebsocketAPI that has no
         # routes. The API has no such implicit contract so CloudFormation can
         # deploy things out of order without the explicit DependsOn.
         depends_on = set(resources['WebsocketAPIDeployment'].pop('DependsOn'))
-        assert set(['WebsocketConnectRoute',
-                    'WebsocketMessageRoute',
-                    'WebsocketDisconnectRoute']) == depends_on
+        assert {
+            'WebsocketConnectRoute',
+            'WebsocketMessageRoute',
+            'WebsocketDisconnectRoute',
+        } == depends_on
+
         assert resources['WebsocketAPIDeployment'] == {
             'Type': 'AWS::ApiGatewayV2::Deployment',
             'Properties': {

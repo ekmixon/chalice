@@ -17,7 +17,7 @@ from chalice.config import DeployedResources
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.join(CURRENT_DIR, 'testwebsocketapp')
 APP_FILE = os.path.join(PROJECT_DIR, 'app.py')
-RANDOM_APP_NAME = 'smoketest-%s' % str(uuid.uuid4())[:13]
+RANDOM_APP_NAME = f'smoketest-{str(uuid.uuid4())[:13]}'
 
 
 def retry(max_attempts, delay):
@@ -28,17 +28,19 @@ def retry(max_attempts, delay):
                 if result is not None:
                     return result
                 time.sleep(delay)
-            raise RuntimeError("Exhausted max retries of %s for function: %s"
-                               % (max_attempts, function))
+            raise RuntimeError(
+                f"Exhausted max retries of {max_attempts} for function: {function}"
+            )
+
         return _wrapped_with_retry
+
     return _create_wrapped_retry_function
 
 
 def _create_ws_connection(url, attempts=5, delay=5):
     for _ in range(attempts):
         try:
-            ws = websocket.create_connection(url)
-            return ws
+            return websocket.create_connection(url)
         except websocket.WebSocketBadStatusException:
             time.sleep(delay)
 
@@ -64,21 +66,19 @@ def _deploy_app(temp_dirname):
     d = factory.create_default_deployer(session, config, UI())
     region = session.get_config_variable('region')
     deployed = _deploy_with_retries(d, config)
-    application = SmokeTestApplication(
+    return SmokeTestApplication(
         region=region,
         deployed_values=deployed,
         stage_name='dev',
         app_name=RANDOM_APP_NAME,
         app_dir=temp_dirname,
     )
-    return application
 
 
 @retry(max_attempts=10, delay=20)
 def _deploy_with_retries(deployer, config):
     try:
-        deployed_stages = deployer.deploy(config, 'dev')
-        return deployed_stages
+        return deployer.deploy(config, 'dev')
     except ChaliceDeploymentError as e:
         # API Gateway aggressively throttles deployments.
         # If we run into this case, we just wait and try
@@ -156,7 +156,7 @@ class SmokeTestApplication(object):
             return
         new_file = os.path.join(self.app_dir, 'app-redeploy.py')
         original_app_py = os.path.join(self.app_dir, 'app.py')
-        shutil.move(original_app_py, original_app_py + '.bak')
+        shutil.move(original_app_py, f'{original_app_py}.bak')
         shutil.copy(new_file, original_app_py)
         _deploy_app(self.app_dir)
         self._has_redeployed = True
@@ -247,7 +247,7 @@ class CountingMessageSender(object):
 
     def send(self):
         value = next(self._counter)
-        self._ws.send('%s' % value)
+        self._ws.send(f'{value}')
         self._last_sent = value
 
     @property
@@ -262,15 +262,16 @@ def get_numbers_from_dynamodb(temp_dirname):
     session = factory.create_botocore_session()
     ddb = session.create_client('dynamodb')
     paginator = ddb.get_paginator('scan')
-    numbers = sorted([
-        int(item['entry']['N'])
-        for page in paginator.paginate(
+    return sorted(
+        [
+            int(item['entry']['N'])
+            for page in paginator.paginate(
                 TableName=RANDOM_APP_NAME,
                 ConsistentRead=True,
-        )
-        for item in page['Items']
-    ])
-    return numbers
+            )
+            for item in page['Items']
+        ]
+    )
 
 
 def get_errors_from_dynamodb(temp_dirname):
@@ -279,9 +280,7 @@ def get_errors_from_dynamodb(temp_dirname):
     ddb = session.create_client('dynamodb')
     item = ddb.get_item(TableName=RANDOM_APP_NAME,
                         Key={'entry': {'N': '-9999'}})
-    if 'Item' not in item:
-        return None
-    return item['Item']['errormsg']['S']
+    return None if 'Item' not in item else item['Item']['errormsg']['S']
 
 
 def find_skips_in_seq(numbers):

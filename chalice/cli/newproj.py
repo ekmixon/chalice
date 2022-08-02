@@ -121,11 +121,7 @@ class ProjectCreator(object):
                 yield full_src_path, full_dst_path
 
     def _should_ignore(self, filename):
-        # type: (str) -> bool
-        for ignore in IGNORE_FILES:
-            if fnmatch.fnmatch(filename, ignore):
-                return True
-        return False
+        return any(fnmatch.fnmatch(filename, ignore) for ignore in IGNORE_FILES)
 
 
 def get_templated_content(contents, template_kwargs):
@@ -166,5 +162,4 @@ def getting_started_prompt():
         inquirer.List('project_type', message='Select your project type',
                       choices=[(p.description, p.key) for p in projects])
     ]
-    answers = inquirer.prompt(questions)
-    return answers
+    return inquirer.prompt(questions)

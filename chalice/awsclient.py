@@ -218,7 +218,7 @@ class TypedAWSClient(object):
             return service
 
         # Simplify the service name down to something like "s3"
-        service_name = matches.group(1)
+        service_name = matches[1]
 
         # Exceptions for Service Principals in us-iso-*
         us_iso_exceptions = {'cloudhsm', 'config', 'states', 'workspaces'}
@@ -230,29 +230,29 @@ class TypedAWSClient(object):
         if region.startswith('us-iso-') and service_name in us_iso_exceptions:
             if service_name == 'states':
                 # Services with universal principal
-                return '{}.amazonaws.com'.format(service_name)
+                return f'{service_name}.amazonaws.com'
             else:
                 # Services with a partitional principal
-                return '{}.{}'.format(service_name, url_suffix)
+                return f'{service_name}.{url_suffix}'
 
         # Account for idiosyncratic Service Principals in `us-isob-*` regions
         if region.startswith('us-isob-') and \
-                service_name in us_isob_exceptions:
+                    service_name in us_isob_exceptions:
             if service_name == 'states':
                 # Services with universal principal
-                return '{}.amazonaws.com'.format(service_name)
+                return f'{service_name}.amazonaws.com'
             else:
                 # Services with a partitional principal
-                return '{}.{}'.format(service_name, url_suffix)
+                return f'{service_name}.{url_suffix}'
 
         if service_name in ['codedeploy', 'logs']:
-            return '{}.{}.{}'.format(service_name, region, url_suffix)
+            return f'{service_name}.{region}.{url_suffix}'
         elif service_name == 'states':
-            return '{}.{}.amazonaws.com'.format(service_name, region)
+            return f'{service_name}.{region}.amazonaws.com'
         elif service_name == 'ec2':
-            return '{}.{}'.format(service_name, url_suffix)
+            return f'{service_name}.{url_suffix}'
         else:
-            return '{}.amazonaws.com'.format(service_name)
+            return f'{service_name}.amazonaws.com'
 
     def lambda_function_exists(self, name):
         # type: (str) -> bool
@@ -268,14 +268,14 @@ class TypedAWSClient(object):
         client = self._client('apigatewayv2')
         try:
             result = client.get_api_mappings(DomainName=domain_name)
-            api_map = [
-                api_map
-                for api_map in result['Items']
-                if api_map['ApiMappingKey'] == api_map_key
-            ]
-            if api_map:
-                return True
-            return False
+            return bool(
+                api_map := [
+                    api_map
+                    for api_map in result['Items']
+                    if api_map['ApiMappingKey'] == api_map_key
+                ]
+            )
+
         except client.exceptions.NotFoundException:
             return False
 
@@ -285,7 +285,7 @@ class TypedAWSClient(object):
         try:
             domain = client.get_domain_name(domainName=domain_name)
         except client.exceptions.NotFoundException:
-            err_msg = "No domain name found by %s name" % domain_name
+            err_msg = f"No domain name found by {domain_name} name"
             raise ResourceDoesNotExistError(err_msg)
         return domain
 
@@ -307,10 +307,7 @@ class TypedAWSClient(object):
             return False
 
     def get_function_configuration(self, name):
-        # type: (str) -> Dict[str, Any]
-        response = self._client('lambda').get_function_configuration(
-            FunctionName=name)
-        return response
+        return self._client('lambda').get_function_configuration(FunctionName=name)
 
     def _create_vpc_config(self, security_group_ids, subnet_ids):
         # type: (OptStrList, OptStrList) -> Dict[str, List[str]]
@@ -453,14 +450,8 @@ class TypedAWSClient(object):
         result = self._client('apigateway').create_base_path_mapping(
             **base_path_args
         )
-        if result['basePath'] == '(none)':
-            base_path = "/"
-        else:
-            base_path = "/%s" % result['basePath']
-        base_path_mapping = {
-            'key': base_path
-        }
-        return base_path_mapping
+        base_path = "/" if result['basePath'] == '(none)' else f"/{result['basePath']}"
+        return {'key': base_path}
 
     def _create_api_mapping(self, api_args):
         # type: (Dict[str, Any]) -> Dict[str, str]
@@ -468,11 +459,8 @@ class TypedAWSClient(object):
         if result['ApiMappingKey'] == '(none)':
             map_key = "/"
         else:
-            map_key = "/%s" % result['ApiMappingKey']
-        api_mapping = {
-            'key': map_key
-        }
-        return api_mapping
+            map_key = f"/{result['ApiMappingKey']}"
+        return {'key': map_key}
 
     def create_domain_name(self,
                            protocol,              # type: str
@@ -538,14 +526,13 @@ class TypedAWSClient(object):
             alias_domain_name = result['regionalDomainName']
         else:
             alias_domain_name = result['distributionDomainName']
-        domain_name = {
+        return {
             'domain_name': result['domainName'],
             'security_policy': result['securityPolicy'],
             'hosted_zone_id': hosted_zone_id,
             'certificate_arn': certificate_arn,
             'alias_domain_name': alias_domain_name,
-        }  # type: DomainNameResponse
-        return domain_name
+        }
 
     def _create_domain_name_v2(self, api_args):
         # type: (Dict[str, Any]) -> DomainNameResponse
@@ -560,14 +547,13 @@ class TypedAWSClient(object):
             retryable_exceptions=exceptions
         )
         result_data = result['DomainNameConfigurations'][0]
-        domain_name = {
+        return {
             'domain_name': result['DomainName'],
             'alias_domain_name': result_data['ApiGatewayDomainName'],
             'security_policy': result_data['SecurityPolicy'],
             'hosted_zone_id': result_data['HostedZoneId'],
-            'certificate_arn': result_data['CertificateArn']
-        }  # type: DomainNameResponse
-        return domain_name
+            'certificate_arn': result_data['CertificateArn'],
+        }
 
     def _create_lambda_function(self, api_args):
         # type: (Dict[str, Any]) -> Tuple[str, str]
@@ -588,9 +574,7 @@ class TypedAWSClient(object):
     def _is_settling_error(self, error):
         # type: (botocore.exceptions.ClientError) -> bool
         message = error.response['Error'].get('Message', '')
-        if re.search('event source mapping.*is in use', message):
-            return True
-        return False
+        return bool(re.search('event source mapping.*is in use', message))
 
     def invoke_function(self, name, payload=None):
         # type: (str, bytes) -> Dict[str, Any]
@@ -616,9 +600,7 @@ class TypedAWSClient(object):
         # This message is also related to IAM roles, it happens when the grant
         # used for the KMS key for encrypting env vars doesn't think the
         # principal is valid yet.
-        if re.search('InvalidArnException.*valid principal', message):
-            return True
-        return False
+        return bool(re.search('InvalidArnException.*valid principal', message))
 
     def _get_lambda_code_deployment_error(self, error, context):
         # type: (Any, LambdaErrorContext) -> LambdaClientError
@@ -632,14 +614,13 @@ class TypedAWSClient(object):
         elif isinstance(error, ClientError):
             code = error.response['Error'].get('Code', '')
             message = error.response['Error'].get('Message', '')
-            if code == 'RequestEntityTooLargeException':
+            if (
+                code == 'RequestEntityTooLargeException'
+                or code == 'InvalidParameterValueException'
+                and 'Unzipped size must be smaller' in message
+            ):
                 # Happens when the zipped deployment package sent to lambda
                 # is too large
-                error_cls = DeploymentPackageTooLargeError
-            elif code == 'InvalidParameterValueException' and \
-                    'Unzipped size must be smaller' in message:
-                # Happens when the contents of the unzipped deployment
-                # package sent to lambda is too large
                 error_cls = DeploymentPackageTooLargeError
         return error_cls(error, context)
 
@@ -753,18 +734,17 @@ class TypedAWSClient(object):
 
     def _remove_unrequested_resource_tags(
             self, resource_arn, requested_tags, remote_tags):
-        # type: (str, Dict[Any, Any], Dict[Any, Any]) -> None
-        tag_keys_to_remove = list(set(remote_tags) - set(requested_tags))
-        if tag_keys_to_remove:
+        if tag_keys_to_remove := list(set(remote_tags) - set(requested_tags)):
             self._client('apigatewayv2').untag_resource(
                 ResourceArn=resource_arn, TagKeys=tag_keys_to_remove)
 
     def _add_missing_or_differing_value_resource_tags(
             self, resource_arn, requested_tags, remote_tags):
-        # type: (str, Dict[Any, Any], Dict[Any, Any]) -> None
-        tags_to_add = {k: v for k, v in requested_tags.items()
-                       if k not in remote_tags or v != remote_tags[k]}
-        if tags_to_add:
+        if tags_to_add := {
+            k: v
+            for k, v in requested_tags.items()
+            if k not in remote_tags or v != remote_tags[k]
+        }:
             self._client('apigatewayv2').tag_resource(
                 ResourceArn=resource_arn, Tags=tags_to_add)
 
@@ -786,7 +766,7 @@ class TypedAWSClient(object):
                 should_retry=lambda x: True,
                 retryable_exceptions=exceptions
             )
-            result.update(response)
+            result |= response
 
         if result.get('regionalCertificateArn'):
             certificate_arn = result['regionalCertificateArn']
@@ -802,14 +782,13 @@ class TypedAWSClient(object):
             alias_domain_name = result['regionalDomainName']
         else:
             alias_domain_name = result['distributionDomainName']
-        domain_name = {
+        return {
             'domain_name': result['domainName'],
             'security_policy': result['securityPolicy'],
             'certificate_arn': certificate_arn,
             'hosted_zone_id': hosted_zone_id,
-            'alias_domain_name': alias_domain_name
-        }  # type: DomainNameResponse
-        return domain_name
+            'alias_domain_name': alias_domain_name,
+        }
 
     def _update_domain_name_v2(self, api_args):
         # type: (Dict[str, Any]) -> DomainNameResponse
@@ -825,14 +804,13 @@ class TypedAWSClient(object):
             retryable_exceptions=exceptions
         )
         result_data = result['DomainNameConfigurations'][0]
-        domain_name = {
+        return {
             'domain_name': result['DomainName'],
             'alias_domain_name': result_data['ApiGatewayDomainName'],
             'security_policy': result_data['SecurityPolicy'],
             'hosted_zone_id': result_data['HostedZoneId'],
-            'certificate_arn': result_data['CertificateArn']
-        }  # type: DomainNameResponse
-        return domain_name
+            'certificate_arn': result_data['CertificateArn'],
+        }
 
     def delete_domain_name(self, domain_name):
         # type: (str) -> None
@@ -992,18 +970,17 @@ class TypedAWSClient(object):
 
     def _remove_unrequested_remote_tags(
             self, function_arn, requested_tags, remote_tags):
-        # type: (str, Dict[Any, Any], Dict[Any, Any]) -> None
-        tag_keys_to_remove = list(set(remote_tags) - set(requested_tags))
-        if tag_keys_to_remove:
+        if tag_keys_to_remove := list(set(remote_tags) - set(requested_tags)):
             self._client('lambda').untag_resource(
                 Resource=function_arn, TagKeys=tag_keys_to_remove)
 
     def _add_missing_or_differing_value_requested_tags(
             self, function_arn, requested_tags, remote_tags):
-        # type: (str, Dict[Any, Any], Dict[Any, Any]) -> None
-        tags_to_add = {k: v for k, v in requested_tags.items()
-                       if k not in remote_tags or v != remote_tags[k]}
-        if tags_to_add:
+        if tags_to_add := {
+            k: v
+            for k, v in requested_tags.items()
+            if k not in remote_tags or v != remote_tags[k]
+        }:
             self._client('lambda').tag_resource(
                 Resource=function_arn, Tags=tags_to_add)
 
@@ -1018,7 +995,7 @@ class TypedAWSClient(object):
         try:
             role = client.get_role(RoleName=name)
         except client.exceptions.NoSuchEntityException:
-            raise ResourceDoesNotExistError("No role ARN found for: %s" % name)
+            raise ResourceDoesNotExistError(f"No role ARN found for: {name}")
         return role['Role']
 
     def delete_role_policy(self, role_name, policy_name):
@@ -1074,10 +1051,7 @@ class TypedAWSClient(object):
 
         """
         rest_apis = self._client('apigateway').get_rest_apis()['items']
-        for api in rest_apis:
-            if api['name'] == name:
-                return api['id']
-        return None
+        return next((api['id'] for api in rest_apis if api['name'] == name), None)
 
     def get_rest_api(self, rest_api_id):
         # type: (str) -> Dict[str, Any]
@@ -1097,8 +1071,7 @@ class TypedAWSClient(object):
             body=json.dumps(swagger_document, indent=2),
             parameters={'endpointConfigurationTypes': endpoint_type}
         )
-        rest_api_id = response['id']
-        return rest_api_id
+        return response['id']
 
     def update_api_from_swagger(self, rest_api_id, swagger_document):
         # type: (str, Dict[str, Any]) -> None
@@ -1207,14 +1180,14 @@ class TypedAWSClient(object):
         if len(dirnames) == 1:
             full_dirname = os.path.join(tmp_extract, dirnames[0])
             if os.path.isdir(full_dirname):
-                final_dirname = 'chalice-%s-sdk' % sdk_type
+                final_dirname = f'chalice-{sdk_type}-sdk'
                 full_renamed_name = os.path.join(tmp_extract, final_dirname)
                 os.rename(full_dirname, full_renamed_name)
                 shutil.move(full_renamed_name, output_dir)
                 return
         raise RuntimeError(
-            "The downloaded SDK had an unexpected directory structure: %s" %
-            (', '.join(dirnames)))
+            f"The downloaded SDK had an unexpected directory structure: {', '.join(dirnames)}"
+        )
 
     def get_sdk_download_stream(self, rest_api_id,
                                 api_gateway_stage=DEFAULT_STAGE_NAME,
@@ -1283,16 +1256,16 @@ class TypedAWSClient(object):
         )
 
     def _build_source_arn_str(self, region_name, account_id, rest_api_id):
-        # type: (str, str, str) -> str
-        source_arn = (
+        return (
             'arn:{partition}:execute-api:'
-            '{region_name}:{account_id}:{rest_api_id}/*').format(
+            '{region_name}:{account_id}:{rest_api_id}/*'
+        ).format(
             partition=self.partition_name,
             region_name=region_name,
             # Assuming same account id for lambda function and API gateway.
             account_id=account_id,
-            rest_api_id=rest_api_id)
-        return source_arn
+            rest_api_id=rest_api_id,
+        )
 
     @property
     def partition_name(self):
@@ -1312,8 +1285,7 @@ class TypedAWSClient(object):
         pages = paginator.paginate(logGroupName=log_group_name,
                                    interleaved=True)
         try:
-            for log_message in self._iter_log_messages(pages):
-                yield log_message
+            yield from self._iter_log_messages(pages)
         except logs.exceptions.ResourceNotFoundException:
             # If the lambda function exists but has not been invoked yet,
             # it's possible that the log group does not exist and we'll get
@@ -1399,9 +1371,8 @@ class TypedAWSClient(object):
         region_name = parts[3]
         account_id = parts[4]
         function_name = parts[-1]
-        source_arn = ("arn:%s:execute-api:%s:%s:%s/authorizers/%s" %
-                      (partition, region_name, account_id, rest_api_id,
-                       authorizer_id))
+        source_arn = f"arn:{partition}:execute-api:{region_name}:{account_id}:{rest_api_id}/authorizers/{authorizer_id}"
+
         dns_suffix = self.endpoint_dns_suffix('apigateway', region_name)
         if random_id is None:
             random_id = self._random_id()
@@ -1554,11 +1525,12 @@ class TypedAWSClient(object):
         existing_config.pop('ResponseMetadata', None)
         existing_lambda_config = existing_config.get(
             'LambdaFunctionConfigurations', [])
-        new_lambda_config = []
-        for config in existing_lambda_config:
-            if config['LambdaFunctionArn'] == function_arn:
-                continue
-            new_lambda_config.append(config)
+        new_lambda_config = [
+            config
+            for config in existing_lambda_config
+            if config['LambdaFunctionArn'] != function_arn
+        ]
+
         existing_config['LambdaFunctionConfigurations'] = new_lambda_config
         s3.put_bucket_notification_configuration(
             Bucket=bucket,
@@ -1587,35 +1559,10 @@ class TypedAWSClient(object):
         self._client('lambda').add_permission(**kwargs)
 
     def _policy_gives_access(self, policy, source_arn, service_name):
-        # type: (Dict[str, Any], str, str) -> bool
-        # Here's what a sample policy looks like after add_permission()
-        # has been previously called:
-        # {
-        #  "Id": "default",
-        #  "Statement": [
-        #   {
-        #    "Action": "lambda:InvokeFunction",
-        #    "Condition": {
-        #     "ArnLike": {
-        #       "AWS:SourceArn": <source_arn>
-        #     }
-        #    },
-        #    "Effect": "Allow",
-        #    "Principal": {
-        #     "Service": "apigateway.amazonaws.com"
-        #    },
-        #    "Resource": "arn:aws:lambda:us-west-2:aid:function:name",
-        #    "Sid": "e4755709-067e-4254-b6ec-e7f9639e6f7b"
-        #   }
-        #  ],
-        #  "Version": "2012-10-17"
-        # }
-        # So we need to check if there's a policy that looks like this.
-        for statement in policy.get('Statement', []):
-            if self._statement_gives_arn_access(statement, source_arn,
-                                                service_name):
-                return True
-        return False
+        return any(
+            self._statement_gives_arn_access(statement, source_arn, service_name)
+            for statement in policy.get('Statement', [])
+        )
 
     def _statement_gives_arn_access(self, statement, source_arn,
                                     service_name, source_account=None):
@@ -1624,21 +1571,20 @@ class TypedAWSClient(object):
         principal = self.service_principal(service_name,
                                            self.region_name,
                                            dns_suffix)
-        if not statement['Action'] == 'lambda:InvokeFunction':
+        if statement['Action'] != 'lambda:InvokeFunction':
             return False
         if statement.get('Condition', {}).get(
                 'ArnLike', {}).get('AWS:SourceArn', '') != source_arn:
             return False
         if statement.get('Principal', {}).get('Service', '') != principal:
             return False
-        if source_account is not None:
-            if statement.get('Condition', {}).get('StringEquals', {}).get(
-                    'AWS:SourceAccount', '') != source_account:
-                return False
-        # We're not checking the "Resource" key because we're assuming
-        # that lambda.get_policy() is returning the policy for the particular
-        # resource in question.
-        return True
+        return (
+            source_account is None
+            or statement.get('Condition', {})
+            .get('StringEquals', {})
+            .get('AWS:SourceAccount', '')
+            == source_account
+        )
 
     def _remove_lambda_permission_if_needed(self, source_arn, function_arn,
                                             service_name, source_account=None):
@@ -1739,9 +1685,9 @@ class TypedAWSClient(object):
             attributes = client.get_event_source_mapping(UUID=event_uuid)
         except client.exceptions.ResourceNotFoundException:
             return False
-        return bool(
-            event_source_arn == attributes['EventSourceArn'] and
-            function_arn == attributes['FunctionArn']
+        return (
+            event_source_arn == attributes['EventSourceArn']
+            and function_arn == attributes['FunctionArn']
         )
 
     def create_websocket_api(self, name):
@@ -1761,10 +1707,7 @@ class TypedAWSClient(object):
     def get_websocket_api_id(self, name):
         # type: (str) -> Optional[str]
         apis = self._client('apigatewayv2').get_apis()['Items']
-        for api in apis:
-            if api['Name'] == name:
-                return api['ApiId']
-        return None
+        return next((api['ApiId'] for api in apis if api['Name'] == name), None)
 
     def websocket_api_exists(self, api_id):
         # type: (str) -> bool
@@ -1808,7 +1751,7 @@ class TypedAWSClient(object):
             ApiId=api_id,
             RouteKey=route_key,
             RouteResponseSelectionExpression='$default',
-            Target='integrations/%s' % integration_id,
+            Target=f'integrations/{integration_id}',
         )
 
     def delete_websocket_routes(self, api_id, routes):
@@ -1888,7 +1831,7 @@ class TypedAWSClient(object):
                 self._sleep(delay_time)
                 attempts += 1
                 if attempts >= max_attempts or \
-                        not should_retry(e):
+                            not should_retry(e):
                     raise
                 continue
             return response

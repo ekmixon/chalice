@@ -63,14 +63,11 @@ def remove_stage_from_deployed_values(key, filename):
         # If there is no file to delete from, then this funciton is a noop.
         return
 
-    try:
+    with contextlib.suppress(KeyError):
         del final_values[key]
         with open(filename, 'wb') as outfile:
             data = serialize_to_json(final_values)
             outfile.write(data.encode('utf-8'))
-    except KeyError:
-        # If they key didn't exist then there is nothing to remove.
-        pass
 
 
 def record_deployed_values(deployed_values, filename):
@@ -193,10 +190,8 @@ class OSUtils(object):
         """Remove a file, noop if file does not exist."""
         # Unlike os.remove, if the file does not exist,
         # then this method does nothing.
-        try:
+        with contextlib.suppress(OSError):
             os.remove(filename)
-        except OSError:
-            pass
 
     def file_exists(self, filename):
         # type: (str) -> bool
@@ -218,10 +213,7 @@ class OSUtils(object):
 
     def set_file_contents(self, filename, contents, binary=True):
         # type: (str, str, bool) -> None
-        if binary:
-            mode = 'wb'
-        else:
-            mode = 'w'
+        mode = 'wb' if binary else 'w'
         with open(filename, mode) as f:
             f.write(contents)
 
@@ -298,9 +290,7 @@ class OSUtils(object):
             shutil.rmtree(tempdir)
 
     def popen(self, command, stdout=None, stderr=None, env=None):
-        # type: (List[str], OptInt, OptInt, EnvVars) -> subprocess.Popen
-        p = subprocess.Popen(command, stdout=stdout, stderr=stderr, env=env)
-        return p
+        return subprocess.Popen(command, stdout=stdout, stderr=stderr, env=env)
 
     def mtime(self, path):
         # type: (str) -> float
@@ -375,9 +365,7 @@ class PipeReader(object):
 
     def read(self):
         # type: () -> OptBytes
-        if not self._stream.isatty():
-            return self._stream.read()
-        return None
+        return None if self._stream.isatty() else self._stream.read()
 
 
 class TimestampConverter(object):
@@ -407,14 +395,13 @@ class TimestampConverter(object):
         parse is appropriately to a timestamp object.
 
         """
-        re_match = self._RELATIVE_TIMESTAMP_REGEX.match(timestamp)
-        if re_match:
-            datetime_value = self._relative_timestamp_to_datetime(
+        return (
+            self._relative_timestamp_to_datetime(
                 int(re_match.group('amount')), re_match.group('unit')
             )
-        else:
-            datetime_value = self.parse_iso8601_timestamp(timestamp)
-        return datetime_value
+            if (re_match := self._RELATIVE_TIMESTAMP_REGEX.match(timestamp))
+            else self.parse_iso8601_timestamp(timestamp)
+        )
 
     def _relative_timestamp_to_datetime(self, amount, unit):
         # type: (int, str) -> datetime

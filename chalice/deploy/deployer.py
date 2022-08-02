@@ -148,9 +148,7 @@ class ChaliceDeploymentError(Exception):
         # type: (Exception) -> None
         self.original_error = error
         where = self._get_error_location(error)
-        msg = self._wrap_text(
-            'ERROR - %s, received the following error:' % where
-        )
+        msg = self._wrap_text(f'ERROR - {where}, received the following error:')
         msg += '\n\n'
         msg += self._wrap_text(self._get_error_message(error), indent=' ')
         msg += '\n\n'
@@ -160,27 +158,28 @@ class ChaliceDeploymentError(Exception):
         super(ChaliceDeploymentError, self).__init__(msg)
 
     def _get_error_location(self, error):
-        # type: (Exception) -> str
-        where = 'While deploying your chalice application'
-        if isinstance(error, LambdaClientError):
-            where = (
+        return (
+            (
                 'While sending your chalice handler code to Lambda to %s '
-                'function "%s"' % (
+                'function "%s"'
+                % (
                     self._get_verb_from_client_method(
-                        error.context.client_method_name),
-                    error.context.function_name
+                        error.context.client_method_name
+                    ),
+                    error.context.function_name,
                 )
             )
-        return where
+            if isinstance(error, LambdaClientError)
+            else 'While deploying your chalice application'
+        )
 
     def _get_error_message(self, error):
-        # type: (Exception) -> str
-        msg = str(error)
-        if isinstance(error, LambdaClientError):
-            if isinstance(error.original_error, RequestsConnectionError):
-                msg = self._get_error_message_for_connection_error(
-                    error.original_error)
-        return msg
+        return (
+            self._get_error_message_for_connection_error(error.original_error)
+            if isinstance(error, LambdaClientError)
+            and isinstance(error.original_error, RequestsConnectionError)
+            else str(error)
+        )
 
     def _get_error_message_for_connection_error(self, connection_error):
         # type: (RequestsConnectionError) -> str
@@ -224,7 +223,7 @@ class ChaliceDeploymentError(Exception):
                         self._get_mb(MAX_LAMBDA_DEPLOYMENT_SIZE)
                     )
                 )
-                suggestion = size_warning + ' ' + suggestion
+                suggestion = f'{size_warning} {suggestion}'
         return suggestion
 
     def _wrap_text(self, text, indent=''):
@@ -316,24 +315,21 @@ def create_build_stage(osutils, ui, swagger_gen, config):
                 ui=ui,
             )
         )
-    build_stage = BuildStage(
+    return BuildStage(
         steps=[
             InjectDefaults(),
             deployment_packager,
             PolicyGenerator(
-                policy_gen=AppPolicyGenerator(
-                    osutils=osutils
-                ),
+                policy_gen=AppPolicyGenerator(osutils=osutils),
                 osutils=osutils,
             ),
             SwaggerBuilder(
                 swagger_generator=swagger_gen,
             ),
             LambdaEventSourcePolicyInjector(),
-            WebsocketPolicyInjector()
+            WebsocketPolicyInjector(),
         ],
     )
-    return build_stage
 
 
 def create_deletion_deployer(client, ui):
@@ -413,7 +409,7 @@ class Deployer(object):
 class BaseDeployStep(object):
     def handle(self, config, resource):
         # type: (Config, models.Model) -> None
-        name = 'handle_%s' % resource.__class__.__name__.lower()
+        name = f'handle_{resource.__class__.__name__.lower()}'
         handler = getattr(self, name, None)
         if handler is not None:
             handler(config, resource)
@@ -617,8 +613,7 @@ class PolicyGenerator(BaseDeployStep):
         try:
             return json.loads(self._osutils.get_file_contents(filename))
         except IOError as e:
-            raise RuntimeError("Unable to load IAM policy file %s: %s"
-                               % (filename, e))
+            raise RuntimeError(f"Unable to load IAM policy file {filename}: {e}")
 
     def handle_filebasediampolicy(self, config, resource):
         # type: (Config, models.FileBasedIAMPolicy) -> None
@@ -662,7 +657,9 @@ class ResultsRecorder(object):
         deployed_dir = self._osutils.joinpath(
             project_dir, '.chalice', 'deployed')
         deployed_filename = self._osutils.joinpath(
-            deployed_dir, '%s.json' % chalice_stage_name)
+            deployed_dir, f'{chalice_stage_name}.json'
+        )
+
         if not self._osutils.directory_exists(deployed_dir):
             self._osutils.makedirs(deployed_dir)
         serialized = serialize_to_json(results)
@@ -703,19 +700,20 @@ class DeploymentReporter(object):
             key=lambda x: self._SORT_ORDER.get(x['resource_type'],
                                                self._DEFAULT_ORDERING))
         for resource in ordered:
-            getattr(self, '_report_%s' % resource['resource_type'],
-                    self._default_report)(resource, report)
+            getattr(
+                self, f"_report_{resource['resource_type']}", self._default_report
+            )(resource, report)
+
         report.append('')
         return '\n'.join(report)
 
     def _report_rest_api(self, resource, report):
         # type: (Dict[str, Any], List[str]) -> None
-        report.append('  - Rest API URL: %s' % resource['rest_api_url'])
+        report.append(f"  - Rest API URL: {resource['rest_api_url']}")
 
     def _report_websocket_api(self, resource, report):
         # type: (Dict[str, Any], List[str]) -> None
-        report.append(
-            '  - Websocket API URL: %s' % resource['websocket_api_url'])
+        report.append(f"  - Websocket API URL: {resource['websocket_api_url']}")
 
     def _report_domain_name(self, resource, report):
         # type: (Dict[str, Any], List[str]) -> None
@@ -729,12 +727,11 @@ class DeploymentReporter(object):
 
     def _report_lambda_function(self, resource, report):
         # type: (Dict[str, Any], List[str]) -> None
-        report.append('  - Lambda ARN: %s' % resource['lambda_arn'])
+        report.append(f"  - Lambda ARN: {resource['lambda_arn']}")
 
     def _report_lambda_layer(self, resource, report):
         # type: (Dict[str, Any], List[str]) -> None
-        report.append('  - Lambda Layer ARN: %s' % (
-            resource['layer_version_arn']))
+        report.append(f"  - Lambda Layer ARN: {resource['layer_version_arn']}")
 
     def _default_report(self, resource, report):
         # type: (Dict[str, Any], List[str]) -> None

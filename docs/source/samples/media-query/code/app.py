@@ -78,7 +78,7 @@ def list_media_files():
 def get_media_file(name):
     item = get_media_db().get_media_file(name)
     if item is None:
-        raise NotFoundError('Media file (%s) not found' % name)
+        raise NotFoundError(f'Media file ({name}) not found')
     return item
 # End of Event Handlers.
 

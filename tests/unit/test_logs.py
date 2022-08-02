@@ -262,8 +262,10 @@ def test_follow_logs_all_pages_empty_with_pagination():
     ]
     event_gen = logs.FollowLogEventGenerator(client, sleep)
     options = logs.LogRetrieveOptions(start_time=1)
-    assert list(event_gen.iter_log_events(
-        log_group_name='mygroup', options=options)) == []
+    assert not list(
+        event_gen.iter_log_events(log_group_name='mygroup', options=options)
+    )
+
     assert client.filter_log_events.call_args_list == [
         mock.call(log_group_name='mygroup', start_time=1),
         mock.call(log_group_name='mygroup', start_time=1,

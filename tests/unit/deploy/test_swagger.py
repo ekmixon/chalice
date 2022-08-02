@@ -76,7 +76,7 @@ def test_can_produce_doc_for_single_docstring(sample_app, swagger_gen):
 
     doc = swagger_gen.generate_swagger(sample_app)
     for method in [1, 2, 3]:
-        view_config = doc['paths']['/method' + str(method)]['get']
+        view_config = doc['paths'][f'/method{str(method)}']['get']
         assert 'summary' in view_config
         assert 'description' not in view_config
         assert view_config['summary'] == 'Single line method summary'
@@ -122,7 +122,7 @@ def test_can_produce_doc_for_multi_docstring(sample_app, swagger_gen):
 
     doc = swagger_gen.generate_swagger(sample_app)
     for method in [1, 2, 3]:
-        view_config = doc['paths']['/method' + str(method)]['get']
+        view_config = doc['paths'][f'/method{str(method)}']['get']
         assert 'summary' in view_config
         assert 'description' in view_config
         assert view_config['summary'] == 'Multiline method summary'

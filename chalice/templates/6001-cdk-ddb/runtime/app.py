@@ -12,20 +12,18 @@ dynamodb_table = dynamodb.Table(os.environ.get('APP_TABLE_NAME', ''))
 def create_user():
     request = app.current_request.json_body
     item = {
-        'PK': 'User#%s' % request['username'],
-        'SK': 'Profile#%s' % request['username'],
+        'PK': f"User#{request['username']}",
+        'SK': f"Profile#{request['username']}",
     }
-    item.update(request)
+
+    item |= request
     dynamodb_table.put_item(Item=item)
     return {}
 
 
 @app.route('/users/{username}', methods=['GET'])
 def get_user(username):
-    key = {
-        'PK': 'User#%s' % username,
-        'SK': 'Profile#%s' % username,
-    }
+    key = {'PK': f'User#{username}', 'SK': f'Profile#{username}'}
     item = dynamodb_table.get_item(Key=key)['Item']
     del item['PK']
     del item['SK']

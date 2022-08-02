@@ -62,7 +62,7 @@ def create_botocore_session(profile=None, debug=False,
 
 def _add_chalice_user_agent(session):
     # type: (Session) -> None
-    suffix = '%s/%s' % (session.user_agent_name, session.user_agent_version)
+    suffix = f'{session.user_agent_name}/{session.user_agent_version}'
     session.user_agent_name = 'aws-chalice'
     session.user_agent_version = chalice_version
     session.user_agent_extra = suffix
@@ -96,15 +96,17 @@ class LargeRequestBodyFilter(logging.Filter):
         # Note: the proper type should be "logging.LogRecord", but
         # the typechecker complains about 'Invalid index type "int" for "dict"'
         # so we're using Any for now.
-        if record.msg.startswith('Making request'):
-            if record.args[0].name in ['UpdateFunctionCode', 'CreateFunction']:
-                # When using the ZipFile argument (which is used in chalice),
-                # the entire deployment package zip is sent as a base64 encoded
-                # string.  We don't want this to clutter the debug logs
-                # so we don't log the request body for lambda operations
-                # that have the ZipFile arg.
-                record.args = (record.args[:-1] +
-                               ('(... omitted from logs due to size ...)',))
+        if record.msg.startswith('Making request') and record.args[0].name in [
+            'UpdateFunctionCode',
+            'CreateFunction',
+        ]:
+            # When using the ZipFile argument (which is used in chalice),
+            # the entire deployment package zip is sent as a base64 encoded
+            # string.  We don't want this to clutter the debug logs
+            # so we don't log the request body for lambda operations
+            # that have the ZipFile arg.
+            record.args = (record.args[:-1] +
+                           ('(... omitted from logs due to size ...)',))
         return True
 
 
@@ -161,8 +163,7 @@ class CLIFactory(object):
             raise RuntimeError("Unable to load the project config file. "
                                "Are you sure this is a chalice project?")
         except ValueError as err:
-            raise RuntimeError("Unable to load the project config file: %s"
-                               % err)
+            raise RuntimeError(f"Unable to load the project config file: {err}")
 
         self._validate_config_from_disk(config_from_disk)
         if autogen_policy is not None:
@@ -205,15 +206,12 @@ class CLIFactory(object):
         else:
             event_generator = cast(BaseLogEventGenerator,
                                    LogEventGenerator(client))
-        retriever = LogRetriever.create_from_lambda_arn(event_generator,
-                                                        lambda_arn)
-        return retriever
+        return LogRetriever.create_from_lambda_arn(event_generator, lambda_arn)
 
     def create_stdin_reader(self):
         # type: () -> PipeReader
         stream = click.get_binary_stream('stdin')
-        reader = PipeReader(stream)
-        return reader
+        return PipeReader(stream)
 
     def create_lambda_invoke_handler(self, name, stage):
         # type: (str, str) -> LambdaInvokeHandler
@@ -237,13 +235,11 @@ class CLIFactory(object):
         client = TypedAWSClient(session)
         invoker = LambdaInvoker(arn, client)
 
-        handler = LambdaInvokeHandler(
+        return LambdaInvokeHandler(
             invoker,
             LambdaResponseFormatter(),
             UI(),
         )
-
-        return handler
 
     def load_chalice_app(self, environment_variables=None,
                          validate_feature_flags=True):

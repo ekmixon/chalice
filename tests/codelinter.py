@@ -23,30 +23,26 @@ class ConditionalImports(BaseChecker):
 
     def visit_import(self, node):
         names = [name[0] for name in node.names]
-        if 'chalice.cli.filewatch.eventbased' in names:
-            if not self._is_in_try_except_import_error(node):
-                self.add_message('must-catch-import-error', node=node)
-                return
+        if (
+            'chalice.cli.filewatch.eventbased' in names
+            and not self._is_in_try_except_import_error(node)
+        ):
+            self.add_message('must-catch-import-error', node=node)
+            return
 
     def visit_importfrom(self, node):
         if node.modname == 'chalice.cli.filewatch.eventbased':
             names = [name[0] for name in node.names]
-            if 'WatchdogWorkerProcess' in names:
-                # Ensure this is wrapped in a try/except.
-                # Technically we should ensure anywhere in the call stack
-                # we're wrapped in a try/except, but in practice we'll just
-                # enforce you did that in the same scope as your import.
-                if not self._is_in_try_except_import_error(node):
-                    self.add_message('must-catch-import-error', node=node)
-                    return
+            if (
+                'WatchdogWorkerProcess' in names
+                and not self._is_in_try_except_import_error(node)
+            ):
+                self.add_message('must-catch-import-error', node=node)
+                return
 
     def _is_in_try_except_import_error(self, node):
         if not isinstance(node.parent, astroid.TryExcept):
             return False
         caught_exceptions = [
             handler.type.name for handler in node.parent.handlers]
-        if 'ImportError' not in caught_exceptions:
-            # They wrapped a try/except but aren't catching
-            # ImportError.
-            return False
-        return True
+        return 'ImportError' in caught_exceptions

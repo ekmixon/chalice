@@ -237,7 +237,7 @@ class TestExecutor(object):
         self.mock_client.region_name = 'us-west-2'
         self.mock_client.partition_name = 'aws'
         self.mock_client.service_principal.return_value = \
-            'apigateway.amazonaws.com'
+                'apigateway.amazonaws.com'
         self.execute([
             BuiltinFunction(
                 function_name='service_principal',
@@ -247,7 +247,7 @@ class TestExecutor(object):
         ])
 
         self.mock_client.service_principal \
-            .assert_called_once_with('apigateway',
+                .assert_called_once_with('apigateway',
                                      'us-west-2',
                                      'amazonaws.com')
         assert self.executor.variables['result'] == {

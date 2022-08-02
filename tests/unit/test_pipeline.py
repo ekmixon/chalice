@@ -29,8 +29,7 @@ class TestPipelineGenLegacy(object):
             codebuild_image=codebuild_image,
             code_source=code_source,
         )
-        template = self.pipeline_gen.create_template(params)
-        return template
+        return self.pipeline_gen.create_template(params)
 
     def test_app_name_in_param_default(self):
         template = self.generate_template(app_name='app')
@@ -106,8 +105,7 @@ class TestPipelineGenV2(object):
             code_source=code_source,
             pipeline_version=pipeline_version,
         )
-        template = self.pipeline_gen.create_template(params)
-        return template
+        return self.pipeline_gen.create_template(params)
 
     def test_new_default_codebuild_image(self):
         template = self.generate_template(app_name='app')
@@ -229,12 +227,10 @@ def test_install_requirements_in_buildspec(pipeline_params):
 
 def test_default_version_range_locks_minor_version():
     parts = [int(p) for p in chalice_version.split('.')]
-    min_version = '%s.%s.%s' % (parts[0], parts[1], 0)
-    max_version = '%s.%s.%s' % (parts[0], parts[1] + 1, 0)
+    min_version = f'{parts[0]}.{parts[1]}.0'
+    max_version = f'{parts[0]}.{parts[1] + 1}.0'
     params = pipeline.PipelineParameters('appname', 'python2.7')
-    assert params.chalice_version_range == '>=%s,<%s' % (
-        min_version, max_version
-    )
+    assert params.chalice_version_range == f'>={min_version},<{max_version}'
 
 
 def test_can_validate_python_version():
@@ -254,8 +250,11 @@ def test_can_generate_github_source(pipeline_params):
     pipeline_params.code_source = 'github'
     pipeline.GithubSource().add_to_template(template, pipeline_params)
     cfn_params = template['Parameters']
-    assert set(cfn_params) == set(['GithubOwner', 'GithubRepoName',
-                                   'GithubPersonalToken'])
+    assert set(cfn_params) == {
+        'GithubOwner',
+        'GithubRepoName',
+        'GithubPersonalToken',
+    }
 
 
 def test_can_create_buildspec_v2():
